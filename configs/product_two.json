@@ -1,0 +1,94 @@
+{
+  "baseline_release": "v1.0.0-baseline",
+  "release_candidate": "v2.0.9",
+  "dataset_version": "uspto_multistep_contextual_v2",
+  "stages": {
+    "context": {
+      "path": "data/canonical_v2_context",
+      "batch_rows": 10000,
+      "checkpoint_routes": 5000,
+      "prefer_parquet": true,
+      "symbolic_resolution_policy": "unique_explicit_route_anchor_only",
+      "atom_mapping": "disabled_by_contract"
+    },
+    "mapping": {
+      "path": "data/mapping_v2",
+      "queue": "data/state/product_two_mapping.sqlite3",
+      "primary_backend": "rxnmapper",
+      "fallback_backend": "mcs_fallback",
+      "rxnmapper_version": "0.4.3",
+      "setuptools_version": "81.0.0",
+      "batch_size": 16,
+      "workers": 1,
+      "prefetch_batches": 2,
+      "shard_rows": 5000,
+      "mapping_min_coverage": 0.6,
+      "mapping_timeout_seconds_mcs_only": 3,
+      "strict_auto_fallback": true
+    },
+    "derivation": {
+      "path": "data/derivation_v2",
+      "queue": "data/state/product_two_derivation.sqlite3",
+      "default_population": "accepted_rxnmapper_only",
+      "mcs_opt_in": true,
+      "shard_rows": 5000
+    },
+    "scientific_canonical": {
+      "path": "data/canonical_v2",
+      "materialize_after_complete_derivation": true
+    },
+    "splits": {
+      "path": "data/canonical_v2/split_manifest.json",
+      "algorithm": "patent_reaction_connected_components_v1",
+      "seed": 42,
+      "strict_invariants": [
+        "patent_document_id_overlap_zero",
+        "reaction_signature_overlap_zero",
+        "route_split_conflicts_zero"
+      ],
+      "product_scaffold_overlap": "diagnostic_only",
+      "mapping_rebuilt": false,
+      "derivation_rebuilt": false
+    }
+  },
+  "training": {
+    "classification_tasks": [
+      "parse_failure_class",
+      "reaction_family"
+    ],
+    "specialist_tasks": [
+      "solvent_multilabel",
+      "solvent_family_multilabel",
+      "time_regression",
+      "temperature_regression",
+      "agent_multilabel",
+      "agent_family_multilabel",
+      "catalyst_family_multilabel"
+    ],
+    "n_features": 262144,
+    "epochs": 2,
+    "alpha": 1e-05,
+    "random_seed": 42,
+    "promotion_policy": "task_specific",
+    "scikit_learn": "1.9.0",
+    "prefit_validation": "universal",
+    "registry": "data/models/model_registry.json"
+  },
+  "retrieval": {
+    "index_version": "reaction_contextual_morgan_v2",
+    "n_bits": 2048,
+    "shard_rows": 10000,
+    "weights": {
+      "reactant": 0.4,
+      "product": 0.45,
+      "reaction_centre": 0.15
+    }
+  },
+  "inference": {
+    "model_weight": 0.55,
+    "neighbour_weight": 0.25,
+    "reaction_family_prior_weight": 0.15,
+    "applicability_weight": 0.05,
+    "abstention_threshold": 0.35
+  }
+}

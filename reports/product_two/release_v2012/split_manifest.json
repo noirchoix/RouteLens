@@ -1,0 +1,53 @@
+{
+  "schema_version": "2.0.9-split-governance-v1",
+  "dataset_version": "uspto_multistep_contextual_v2",
+  "created_at_utc": "2026-07-25T14:37:13.195943+00:00",
+  "parent_final_manifest_sha256": "98985065638b30d1744ad44673a4241e177293fd5a7722f1e88f4a475703740e",
+  "upstream_manifests": {
+    "mapping_manifest_sha256": "62ac78f8a6faefa6e4ee86639a1c2a71aae838204ec3f60c9a164d8d1b1450f9",
+    "derivation_manifest_sha256": "e971dc4750888f252990725d909a19c147253df0c9a4fa52cd0c21b823e5aa00"
+  },
+  "algorithm": "patent_reaction_connected_components_v1",
+  "seed": 42,
+  "fractions": {
+    "train": 0.8,
+    "val": 0.1,
+    "test": 0.1
+  },
+  "rows": 326787,
+  "routes": 235265,
+  "components": 28093,
+  "component_counts": {
+    "train": 21506,
+    "val": 3293,
+    "test": 3294
+  },
+  "target_rows": {
+    "train": 261430,
+    "val": 32679,
+    "test": 32679
+  },
+  "actual_rows": {
+    "train": 261431,
+    "val": 32678,
+    "test": 32678
+  },
+  "assignment_sha256": "f78e17f9f9b4a3e50f43aa9fd112f4485dc313f63e6cbdd6450d06d28f3dc68b",
+  "invariants": {
+    "patent_document_id_overlapping_keys": 0,
+    "reaction_signature_overlapping_keys": 0,
+    "route_split_conflicts": 0,
+    "strict_pass": true
+  },
+  "largest_component_rows": 184373,
+  "largest_component_routes": 126622,
+  "training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+  "contract": {
+    "patent_document_id_is_grouped": true,
+    "reaction_signature_is_grouped": true,
+    "route_instance_is_atomic": true,
+    "product_scaffold_is_diagnostic_only": true,
+    "mapping_outputs_were_not_rebuilt": true,
+    "derivation_outputs_were_not_rebuilt": true
+  }
+}

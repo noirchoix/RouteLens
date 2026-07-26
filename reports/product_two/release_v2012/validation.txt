@@ -1,0 +1,779 @@
+{
+  "pipeline_state": {
+    "context_manifest": true,
+    "mapping_manifest": true,
+    "derivation_manifest": true,
+    "final_manifest": true,
+    "split_manifest": true,
+    "mapping_queue_summary": {
+      "failed": 26,
+      "low_confidence": 75450,
+      "mapped": 80606,
+      "not_eligible": 170705,
+      "total": 326787
+    },
+    "derivation_queue_summary": {
+      "derived": 80606,
+      "total": 80606
+    },
+    "mapping_complete": true,
+    "derivation_complete": true,
+    "primary_backend": "rxnmapper",
+    "rxnmapper_required_for_strict_release": true,
+    "mapping_outputs_segregated": true,
+    "split_algorithm": "patent_reaction_connected_components_v1",
+    "split_seed": 42,
+    "split_invariants": {
+      "patent_document_id_overlapping_keys": 0,
+      "reaction_signature_overlapping_keys": 0,
+      "route_split_conflicts": 0,
+      "strict_pass": true
+    },
+    "mapping_rebuilt_by_v209": false,
+    "derivation_rebuilt_by_v209": false,
+    "pass": true
+  },
+  "dataset_integrity": {
+    "rows": 326787,
+    "unique_step_instance_ids": 326787,
+    "duplicate_step_instance_ids": 0,
+    "routes_total": 235265,
+    "unique_route_instance_ids": 235265,
+    "unique_source_route_ids": 235196,
+    "duplicate_source_route_groups": 64,
+    "preserved_conflicting_variant_rows": 69,
+    "cross_variant_edges": 0,
+    "route_split_conflicts": 0,
+    "route_component_conflicts": 0,
+    "contextual_parse_valid": 156082,
+    "resolution_counts": {
+      "not_required": 196769,
+      "unresolved": 130018
+    },
+    "expected_product_one_route_rows": 235265,
+    "pass": true
+  },
+  "leakage": {
+    "rows_examined": 326787,
+    "summaries": {
+      "patent_document_id": {
+        "key_type": "patent_document_id",
+        "unique_keys": 36199,
+        "overlapping_keys": 0,
+        "train_val_overlap": 0,
+        "train_test_overlap": 0,
+        "val_test_overlap": 0,
+        "examples": []
+      },
+      "reaction_signature": {
+        "key_type": "reaction_signature",
+        "unique_keys": 311423,
+        "overlapping_keys": 0,
+        "train_val_overlap": 0,
+        "train_test_overlap": 0,
+        "val_test_overlap": 0,
+        "examples": []
+      },
+      "product_scaffold": {
+        "key_type": "product_scaffold",
+        "unique_keys": 64387,
+        "overlapping_keys": 3948,
+        "train_val_overlap": 2319,
+        "train_test_overlap": 2288,
+        "val_test_overlap": 905,
+        "examples": [
+          {
+            "key": "00105d6707465483c51b9506778fc4364c65d9a8ddc67b12ccb519ed404bb026",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "0014129f1dfe81ddb00e94d4e51c3a7aaa208e05c48fd7f2675d7bc6500693ad",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "001f347b4b7d26f79ffb2e2926551daf527c17362df90cea3a414e2f2eab6121",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "002c98424528076cadf65aa0eedd7779cb8191a8b89877077e43f983a43f02a3",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "004ca66d8b4384905a524e7ea9f57ab60d1d7b06b7f1b06ad2d1454b0fabf05d",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "004ec9d23f412866c765f269ea9dc6ec6235e7a54a561e15246413a58cfb78c4",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "005528fd15e698150db0b324c85ff25503fd7fba38f03ac562f690cd33432f08",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "0058e76ceb8fa4c6c593fa3fd8c39351acdf8059d399cd49107b86a130fe95a2",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "0063c97fc7787fe217e559b285622aa7cfc6de224916212f29e426184a1d4fb9",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "0093c7444449c41874d3f211c65eed83fc24707bc9c8fde6d952cfb0b4b8c0dc",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "00a85cdacb1cc24a7c4e1e55110d4c6c3cba5ceefc5f8f6d8fb560c082d44aba",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "00b05f459bde621a120bf903e6c8577609e993e248673b4b4c7d56e6a08d882e",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "00c1f41f8e74d29052d9acaeea521b23c03e7a5f1f577dc0810d9aa24ec4e309",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "00c4784cf9522bfeb9e0811b6af3cf5f27a32b525c8914bce11ccd324e5c0cd0",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "00cec5ee2f7ee663c99367bbb761ade46252fc238bbb5bd574d645f5f6f556b6",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "00d4dc32ce97515ec8c0a0c5315ca77a3a2d3ebc8067e94edd1149fed9cf7a31",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "00f6e76ecf0aec8537fadd13330d0776e630bdb02c70d7ebcbbb00b4c73323d5",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "00f867a278d322e8872bc96c1a91f03a27e6463eccc0682d5d68d1f515c77a84",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "010d3b958990032b9365024bc01781cb9316e05a53b325d94fd1821b92623203",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "010dda073015a133215eacbf0da3893720ee1b637f954b079fc5acd454925978",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "011efd236b420ef818e4b557e45584878f7bff8158551acc71f9bc9edeb08af6",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "012a30abc64f1680ecae2603fb2058479802de152e663103f84560ba96a6e343",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "01317c0ab9fb1090e2ec35154e8964c3c39c070c64185208d27fa61a76af0937",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "013cdb8869f02a17f87f889596269571fd274cf84366ba7a78f3e0ba8428e8dd",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "0147552c06c667b4f341560b67366bea7dd4e097821a548d958251e047bd49c6",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "014a2fb08bbfd2726fff31a16c05fa652ae3aa8898009fc63da8c32c6e437c31",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "015e0f638556c19be41a05e011dbe004735ecfec10c99e40759a24ed528318e4",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "015e9fb8324c666e1f453022b45026d537ae762972c95b4b3a002aa34f4a0de1",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "01650248b5d163dd8b485e6df684babf534d5389a14ecbd423955bc779e256e2",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "016c8f414206a0ff222cac14d5302aaad008008202aa5a94349e7bb249d7b5bd",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "016cf2e3f07ade48f4c824ac9d3d77483d3e9e3ef6102a4b60faf2d7dcb5af9d",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "01705713386af53cad832163a9581207a8cf17df80d8787bbdc03accac037365",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "017579345f5dbb81d1d04ee6fca742ac0a6aa88fef8e981d6a650c9c5e014a6d",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "017691553a1dd916343e4b6fe52722a2408d17fc00d84d2ca5ca58272a8a70b2",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "018dc1cb440d1937609916abd5430d03a98fff3dfe21b0b760b15cc75917b865",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "0193998314fef76bed300288bbf6fce0c2bf6b6451d49b2233a2bed3ed1cfb1b",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "01e3283862580165fa0adfaaea355d4cfe9bed428b8a221e365a8564726c991a",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "01ec4a3c17ba21c22429c2329f6c4ed1fa7f361dd8ab50c53f50c44d4472cb3e",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "01f7c0b67514cc465b02d24d1d37d25cd69c65008c9f1d33909e70d0066db989",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "01ff26d45d340faf3c083d5d39b2e857939a78547b74f7667af99b33ba711073",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "020e9e3e047bae6960eaf344f4b78696465ce53d35da16fae3bc8ffb23f68cd2",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "0211cd3d067bb622a98d05a2862d4b3ec058c971bf22397def83ee3c72523d27",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "0217c43c5d71cfacfdab5db1a766d276ae78c59208f4208d16b2d78d13d01025",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "0218d0edc27ead5957fa90cea79c03790db4db73c072c3e9464e639c630b5a21",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "021b5f4375b4380619d5036cf49cc82628905b430778d9e1d1ed8641a9f3fd83",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "022d1a91849f5dd81a0245d7d0ee7fb58a51f75394145376a82c370efb8ebc26",
+            "splits": [
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "026b48f95647e319460ae0b1cbf4ca9e40c3e28f7754e6b8dea56e32b011a8fa",
+            "splits": [
+              "test",
+              "train",
+              "val"
+            ]
+          },
+          {
+            "key": "026e36aa2a9d2c238d849353add8be206c04f9bf12f4547e49c2f886f166a323",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "02768b2578aae878373c57c1950294c0b34cac63f2e4cfda7766dd0bc652eb9d",
+            "splits": [
+              "test",
+              "train"
+            ]
+          },
+          {
+            "key": "027c8c520d843c6afea80d144878077b51a4f87da0b97535d6b70c6a981162ab",
+            "splits": [
+              "train",
+              "val"
+            ]
+          }
+        ]
+      }
+    },
+    "strict_invariants": {
+      "patent_document_id_overlap_is_zero": true,
+      "reaction_signature_overlap_is_zero": true,
+      "product_scaffold_is_diagnostic_only": true
+    },
+    "strict_pass": true,
+    "interpretation": {
+      "patent_document_id": "Must be zero for the grouped benchmark.",
+      "reaction_signature": "Must be zero for strict supervised evaluation.",
+      "product_scaffold": "Challenge diagnostic only; overlap may remain across connected-component splits."
+    }
+  },
+  "index_state": {
+    "reaction_manifest": true,
+    "route_manifest": true,
+    "reaction_rows": 156082,
+    "route_rows": 156076,
+    "current_training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+    "reaction_training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+    "route_training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+    "reaction_split_matches": true,
+    "route_split_matches": true,
+    "pass": true
+  },
+  "model_loading": {
+    "registry_json": true,
+    "registry_json_sha256": "c7774042ac406e7f46ffc9fa9b29ce1deea83d311d92ed7afa93cecde530cb6e",
+    "runtime_environment": {
+      "python": "3.13.13",
+      "python_implementation": "CPython",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "scikit_learn": "1.9.0",
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "joblib": "1.5.3",
+      "rdkit": "2026.3.4"
+    },
+    "loaded": [
+      {
+        "model_id": "catalyst_family_multilabel:20260725151112-137fd226",
+        "stage": "staging",
+        "lifecycle_state": "active",
+        "task": "catalyst_family_multilabel",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "agent_family_multilabel:20260725151007-52ffcb14",
+        "stage": "candidate",
+        "lifecycle_state": "active",
+        "task": "agent_family_multilabel",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "temperature_regression:20260725150843-e5e977e1",
+        "stage": "staging",
+        "lifecycle_state": "active",
+        "task": "temperature_regression",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "time_regression:20260725150713-78597bd0",
+        "stage": "staging",
+        "lifecycle_state": "active",
+        "task": "time_regression",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "solvent_family_multilabel:20260725150451-bf4bc660",
+        "stage": "candidate",
+        "lifecycle_state": "active",
+        "task": "solvent_family_multilabel",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "solvent_multilabel:20260725150220-17825fe4",
+        "stage": "candidate",
+        "lifecycle_state": "active",
+        "task": "solvent_multilabel",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "reaction_family:20260725150004-7f8baee2",
+        "stage": "candidate",
+        "lifecycle_state": "active",
+        "task": "reaction_family",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      },
+      {
+        "model_id": "parse_failure_class:20260725145908-b874f272",
+        "stage": "candidate",
+        "lifecycle_state": "active",
+        "task": "parse_failure_class",
+        "checks": {
+          "artifact_exists": true,
+          "artifact_sha256_matches": true,
+          "split_sha256_matches": true,
+          "environment": {
+            "expected_scikit_learn": "1.9.0",
+            "runtime_scikit_learn": "1.9.0",
+            "project_pin": "1.9.0",
+            "training_environment_present": true,
+            "pin_satisfied": true,
+            "training_runtime_match": true,
+            "pass": true
+          },
+          "model_card_exists": true,
+          "prefit_trainable": true,
+          "pass_before_load": true
+        }
+      }
+    ],
+    "current_task_audits": [],
+    "archived_or_superseded": [
+      {
+        "model_id": "catalyst_family_multilabel:20260724170619-1a9c8da0",
+        "task": "catalyst_family_multilabel",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "agent_family_multilabel:20260724170605-bfd8fa89",
+        "task": "agent_family_multilabel",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "temperature_regression:20260724170530-9bbff267",
+        "task": "temperature_regression",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "time_regression:20260724170423-293ba85c",
+        "task": "time_regression",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "solvent_family_multilabel:20260724170313-a798e8bf",
+        "task": "solvent_family_multilabel",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "solvent_multilabel:20260724170153-51a7e453",
+        "task": "solvent_multilabel",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "reaction_family:20260724170027-69c04158",
+        "task": "reaction_family",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      },
+      {
+        "model_id": "parse_failure_class:20260724164237-4613473c",
+        "task": "parse_failure_class",
+        "lifecycle_state": "superseded",
+        "runtime_load_required": false
+      }
+    ],
+    "archived_artifacts_deserialized": 0,
+    "duplicate_runtime_tasks": {},
+    "required_tasks": [
+      "agent_family_multilabel",
+      "catalyst_family_multilabel",
+      "parse_failure_class",
+      "reaction_family",
+      "solvent_family_multilabel",
+      "solvent_multilabel",
+      "temperature_regression",
+      "time_regression"
+    ],
+    "missing_tasks": [],
+    "failures": [],
+    "pass": true
+  },
+  "api_smoke": {
+    "health_status": 200,
+    "v2_health_status": 200,
+    "single_status": 200,
+    "batch_status": 200,
+    "online_batch_equivalent": true,
+    "pass": true
+  },
+  "retrieval": {
+    "queries": 50,
+    "k": 10,
+    "self_recall_at_k": 1.0,
+    "family_recall_at_k": 1.0,
+    "latency_ms": {
+      "mean": 1311.8393320031464,
+      "p50": 1250.504900002852,
+      "p95": 1293.279680015985,
+      "max": 4255.07660000585
+    },
+    "pass": true
+  },
+  "reproducibility": {
+    "canonical_v2_tree_sha256": "53346d6706d9db898b4b272cb49e684b1916adbd5faec530c834b73fa1ac4b6b",
+    "training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+    "registry_database_sha256": "9889dd42f54c62eead48730b44c6d020599d77c535d2a293b97d8da18fd7de81",
+    "registry_json_sha256": "c7774042ac406e7f46ffc9fa9b29ce1deea83d311d92ed7afa93cecde530cb6e",
+    "registry_read_only_validation": {
+      "before": {
+        "database_sha256": "9889dd42f54c62eead48730b44c6d020599d77c535d2a293b97d8da18fd7de81",
+        "json_sha256": "c7774042ac406e7f46ffc9fa9b29ce1deea83d311d92ed7afa93cecde530cb6e"
+      },
+      "after": {
+        "database_sha256": "9889dd42f54c62eead48730b44c6d020599d77c535d2a293b97d8da18fd7de81",
+        "json_sha256": "c7774042ac406e7f46ffc9fa9b29ce1deea83d311d92ed7afa93cecde530cb6e"
+      },
+      "pass": true
+    }
+  },
+  "elapsed_seconds": 426.1522705554962,
+  "strict_pass": true
+}

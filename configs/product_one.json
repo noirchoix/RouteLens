@@ -1,0 +1,25 @@
+{
+  "dataset_version": "uspto_multistep_canonical_v1",
+  "canonical": {
+    "chunksize": 20000,
+    "prefer_parquet": true,
+    "temperature_min_c": -150.0,
+    "temperature_max_c": 350.0,
+    "time_min_h": 0.0002777778,
+    "time_max_h": 8760.0
+  },
+  "training": {
+    "tasks": ["parse_validity", "primary_solvent", "time_bucket", "temperature_bucket", "agent_presence"],
+    "n_features": 262144,
+    "epochs": 2,
+    "alpha": 0.00001,
+    "random_seed": 42
+  },
+  "retrieval": {
+    "fingerprint": "Morgan radius 2",
+    "n_bits": 2048,
+    "shard_rows": 10000,
+    "reactant_weight": 0.45,
+    "product_weight": 0.55
+  }
+}
