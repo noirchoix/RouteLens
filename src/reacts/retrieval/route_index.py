@@ -142,27 +142,138 @@ class RouteEmbeddingIndexBuilder:
 
 
 class RouteEmbeddingIndex:
-    def __init__(self, index_dir: Path):
+    """Disk-backed route retrieval over an immutable dense vector matrix.
+
+    Artifact bundles published by Product Two v2.1.5 store the matrix as a
+    standalone ``.npy`` file. NumPy can memory-map that format, which avoids
+    materialising the complete route matrix during application warm-up or
+    retrieval. Older local indexes that still contain ``route_embeddings.npz``
+    remain readable for development and migration tests.
+    """
+
+    DEFAULT_SEARCH_CHUNK_ROWS = 2_048
+
+    def __init__(self, index_dir: Path, *, preload_vectors: bool = False):
         candidate = Path(index_dir)
         root = candidate if (candidate / "route_index_manifest.json").exists() else candidate / "routes"
         self.root = root
         self.manifest = json.loads((root / "route_index_manifest.json").read_text(encoding="utf-8"))
-        self.vectors = np.load(root / "route_embeddings.npz")["vectors"]
-        self.metadata = [
-            json.loads(line)
-            for line in (root / "route_metadata.jsonl").read_text(encoding="utf-8").splitlines()
-            if line
-        ]
+        self.vector_path = root / str(self.manifest.get("vectors") or "route_embeddings.npz")
+        self.metadata_path = root / str(self.manifest.get("metadata") or "route_metadata.jsonl")
+        self._vectors: np.ndarray | np.memmap | None = None
+        self._npz_handle: Any | None = None
+        self._metadata_offsets: np.ndarray | None = None
+        if preload_vectors:
+            self._ensure_vectors()
 
+    def close(self) -> None:
+        vectors = self._vectors
+        self._vectors = None
+        if isinstance(vectors, np.memmap):
+            mmap_handle = getattr(vectors, "_mmap", None)
+            if mmap_handle is not None:
+                mmap_handle.close()
+        if self._npz_handle is not None:
+            self._npz_handle.close()
+            self._npz_handle = None
+
+    def _validate_shape(self, vectors: np.ndarray) -> None:
+        expected = (
+            int(self.manifest.get("rows", 0)),
+            int(self.manifest.get("dimensions", 0)),
+        )
+        actual = tuple(int(value) for value in vectors.shape)
+        if actual != expected:
+            raise RuntimeError(f"Route vector shape mismatch: expected={expected}, actual={actual}")
+        if vectors.dtype != np.dtype(np.float32):
+            raise RuntimeError(f"Route vector dtype mismatch: expected=float32, actual={vectors.dtype}")
+
+    def _ensure_vectors(self) -> np.ndarray:
+        if self._vectors is not None:
+            return self._vectors
+        if not self.vector_path.is_file():
+            raise FileNotFoundError(self.vector_path)
+        if self.vector_path.suffix.lower() == ".npy":
+            vectors = np.load(self.vector_path, mmap_mode="r", allow_pickle=False)
+        elif self.vector_path.suffix.lower() == ".npz":
+            # Compatibility path for pre-v2.1.5 local indexes. Published bundles
+            # are converted to mmap-capable NPY storage by the artifact publisher.
+            self._npz_handle = np.load(self.vector_path, allow_pickle=False)
+            vectors = self._npz_handle["vectors"]
+        else:
+            raise RuntimeError(f"Unsupported route vector storage: {self.vector_path.name}")
+        self._validate_shape(vectors)
+        self._vectors = vectors
+        return vectors
+
+    def storage_info(self, *, sample: bool = True) -> dict[str, Any]:
+        vectors = self._ensure_vectors()
+        if sample and len(vectors):
+            # Touch one row only. This verifies that the mapped payload can be
+            # read without allocating the full matrix.
+            np.asarray(vectors[0:1]).sum(dtype=np.float64)
+        return {
+            "vectors": self.vector_path.name,
+            "vectors_format": self.manifest.get("vectors_format")
+            or ("npy_memmap_v1" if self.vector_path.suffix.lower() == ".npy" else "npz_dense_legacy"),
+            "memory_mapped": isinstance(vectors, np.memmap),
+            "rows": int(vectors.shape[0]),
+            "dimensions": int(vectors.shape[1]),
+            "dtype": str(vectors.dtype),
+            "search_chunk_rows": int(
+                self.manifest.get("search_chunk_rows") or self.DEFAULT_SEARCH_CHUNK_ROWS
+            ),
+        }
+
+    def _offsets(self) -> np.ndarray:
+        if self._metadata_offsets is not None:
+            return self._metadata_offsets
+        expected_rows = int(self.manifest.get("rows", 0))
+        offsets = np.empty(expected_rows, dtype=np.uint64)
+        count = 0
+        position = 0
+        with self.metadata_path.open("rb") as handle:
+            for line in handle:
+                if count >= expected_rows:
+                    raise RuntimeError("Route metadata contains more rows than its manifest.")
+                offsets[count] = position
+                position += len(line)
+                count += 1
+        if count != expected_rows:
+            raise RuntimeError(
+                f"Route metadata row mismatch: expected={expected_rows}, actual={count}"
+            )
+        self._metadata_offsets = offsets
+        return offsets
+
+    def _metadata_at(self, indices: list[int]) -> list[dict[str, Any]]:
+        if not indices:
+            return []
+        offsets = self._offsets()
+        records: dict[int, dict[str, Any]] = {}
+        with self.metadata_path.open("rb") as handle:
+            for index in sorted(set(indices)):
+                if index < 0 or index >= len(offsets):
+                    raise IndexError(index)
+                handle.seek(int(offsets[index]))
+                line = handle.readline()
+                records[index] = json.loads(line.decode("utf-8"))
+        return [records[index] for index in indices]
 
     def get_route(self, route_id: str) -> dict[str, Any] | None:
-        for record in self.metadata:
-            if route_id in {
-                str(record.get("route_id") or ""),
-                str(record.get("route_instance_id") or ""),
-                str(record.get("source_route_id") or ""),
-            }:
-                return {**record, "artifact_backed_summary": True}
+        # Route-ID lookup remains streaming and bounded; it does not parse the
+        # complete metadata corpus into memory.
+        with self.metadata_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                if route_id in {
+                    str(record.get("route_id") or ""),
+                    str(record.get("route_instance_id") or ""),
+                    str(record.get("source_route_id") or ""),
+                }:
+                    return {**record, "artifact_backed_summary": True}
         return None
 
     def search_reaction(self, reaction_smiles: str, k: int = 10) -> list[dict[str, Any]]:
@@ -171,14 +282,29 @@ class RouteEmbeddingIndex:
         return self.search_vector(vector, k=k)
 
     def search_vector(self, vector: np.ndarray, k: int = 10) -> list[dict[str, Any]]:
+        vectors = self._ensure_vectors()
+        if vector.ndim != 1 or vector.shape[0] != vectors.shape[1]:
+            raise ValueError(
+                f"Route query dimension mismatch: expected={vectors.shape[1]}, actual={vector.shape}"
+            )
         norm = np.linalg.norm(vector)
-        query = vector / norm if norm else vector
-        scores = self.vectors @ query
-        local_k = min(k, len(scores))
+        query = (vector / norm if norm else vector).astype(np.float32, copy=False)
+        scores = np.empty(vectors.shape[0], dtype=np.float32)
+        chunk_rows = max(
+            1,
+            int(self.manifest.get("search_chunk_rows") or self.DEFAULT_SEARCH_CHUNK_ROWS),
+        )
+        for start in range(0, vectors.shape[0], chunk_rows):
+            stop = min(start + chunk_rows, vectors.shape[0])
+            scores[start:stop] = np.asarray(vectors[start:stop]) @ query
+        local_k = min(max(int(k), 0), len(scores))
         if local_k == 0:
             return []
         indices = np.argpartition(scores, -local_k)[-local_k:]
+        ordered = indices[np.argsort(scores[indices])[::-1]]
+        ordered_indices = [int(index) for index in ordered]
+        metadata = self._metadata_at(ordered_indices)
         return [
-            {**self.metadata[int(index)], "score": float(scores[int(index)])}
-            for index in indices[np.argsort(scores[indices])[::-1]]
+            {**record, "score": float(scores[index])}
+            for index, record in zip(ordered_indices, metadata, strict=True)
         ]

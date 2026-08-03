@@ -13,6 +13,10 @@ The service must be measured on the actual deployment hardware. The values below
 | Missing/corrupt artifact behavior | fail closed |
 | Batch size | explicitly bounded by configuration |
 | Request body | explicitly bounded by configuration |
+| Route warm-up allocation | one mapped row, not the complete matrix |
+| Route-search working set | bounded by `search_chunk_rows` (default 2,048) |
+
+The expanded artifact directory contains an uncompressed memory-mapped route matrix of approximately 2.38 GiB. Capacity planning must include the source bundle, staging directory, installed cache, and container layer where applicable. The ZIP distribution remains compressed, but extraction requires sufficient free disk space.
 
 ## Measurements
 

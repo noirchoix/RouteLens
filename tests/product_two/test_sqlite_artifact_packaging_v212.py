@@ -12,15 +12,16 @@ def _create_wal_registry(path: Path) -> None:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(
             "CREATE TABLE model_versions ("
-            "model_id TEXT PRIMARY KEY, task TEXT, artifact_path TEXT, "
+            "model_id TEXT PRIMARY KEY, task TEXT, dataset_version TEXT, artifact_path TEXT, "
             "model_card_path TEXT, split_sha256 TEXT, "
             "runtime_load_required INTEGER, lifecycle_state TEXT)"
         )
         conn.execute(
-            "INSERT INTO model_versions VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO model_versions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "reaction_family:test",
                 "reaction_family",
+                "uspto_multistep_contextual_v2",
                 "old/model.joblib",
                 "old/model_card.json",
                 "a" * 64,
@@ -77,6 +78,7 @@ def test_artifact_sqlite_helpers_close_connections_and_remove_wal_state(
         {
             "model_id": "reaction_family:test",
             "task": "reaction_family",
+            "dataset_version": "uspto_multistep_contextual_v2",
             "artifact_path": "models/reaction_family/model.joblib",
             "model_card_path": None,
             "split_sha256": "a" * 64,

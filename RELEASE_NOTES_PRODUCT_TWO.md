@@ -1,3 +1,26 @@
+# Product Two v2.1.5 — Memory-Mapped Route Index Hotfix
+
+## Corrected
+
+- Identifies the 2.38 GiB startup allocation as eager deserialization of the 156,076 × 4,096 float32 route matrix, not a `parse_failure_class` model failure.
+- Streams the locked `vectors.npy` member out of the source NPZ during artifact publication without rebuilding or recalculating route embeddings.
+- Publishes `route_embeddings.npy` with explicit shape, dtype, hash, and mmap storage contracts.
+- Memory-maps route vectors, scores them in bounded 2,048-row chunks, and reads only selected metadata rows.
+- Verifies one mapped row during readiness and releases the mapping until route retrieval is requested.
+- Attributes warm-up failures to the actual runtime component rather than the last model in registry order.
+- Lazily imports FastAPI `TestClient` only during acceptance API smoke, removing the production CLI deprecation warning path.
+- Introduces corrected artifact distribution identifier `product-two-artifacts-v2.0.12-r1`; models, split hashes, route identities, and vector values are unchanged.
+
+# Product Two v2.1.4 — Dataset-Scoped Artifact Registry Hotfix
+
+## Corrected
+
+- Scopes artifact model selection to the canonical dataset version declared by the bundle source manifest.
+- Excludes preserved `uspto_multistep_canonical_v1` runtime records from the `uspto_multistep_contextual_v2` inference bundle without mutating the source registry or deleting source artifacts.
+- Reduces the packaged SQLite registry to the selected dataset-bound model records, keeping JSON/SQLite runtime IDs and paths identical.
+- Retains fail-closed validation for same-dataset split, training-environment, model-hash, and required-task mismatches.
+- Records source-versus-selected runtime model counts in the artifact manifest for release auditability.
+
 # Product Two v2.1.3 — Windows Artifact URI Resolution Hotfix
 
 ## Corrected

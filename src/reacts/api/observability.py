@@ -147,9 +147,9 @@ def record_runtime_metrics(application: Any) -> None:
             application.artifact_runtime.reason_code or "unknown"
         ).inc()
     if application.artifact_runtime.reason_code == "artifact_warmup_failed":
-        MODEL_LOAD_FAILURES.labels(
-            str(application.artifact_runtime.warmup.get("failed_task") or "unknown")
-        ).inc()
+        failed_task = application.artifact_runtime.warmup.get("failed_task")
+        if failed_task:
+            MODEL_LOAD_FAILURES.labels(str(failed_task)).inc()
 
 
 def metrics_response() -> Response:

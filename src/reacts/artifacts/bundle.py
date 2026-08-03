@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+import numpy as np
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
@@ -66,16 +67,22 @@ def _copy_file(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
-def _runtime_models(registry: dict[str, Any]) -> list[dict[str, Any]]:
+def _runtime_models(
+    registry: dict[str, Any],
+    *,
+    dataset_version: str | None = None,
+) -> list[dict[str, Any]]:
     models = registry.get("models") or []
     output = [
         dict(model)
         for model in models
         if bool(model.get("runtime_load_required"))
         and model.get("lifecycle_state") in {"active", "candidate"}
+        and (dataset_version is None or str(model.get("dataset_version") or "") == dataset_version)
     ]
     if not output:
-        raise ArtifactContractError("The model registry contains no runtime-loadable models.")
+        scope = f" for dataset {dataset_version}" if dataset_version else ""
+        raise ArtifactContractError(f"The model registry contains no runtime-loadable models{scope}.")
     tasks: dict[str, str] = {}
     for model in output:
         task = str(model.get("task") or "")
@@ -89,31 +96,68 @@ def _runtime_models(registry: dict[str, Any]) -> list[dict[str, Any]]:
     return output
 
 
-def _index_files(index_dir: Path) -> list[Path]:
+def _reaction_index_files(index_dir: Path) -> list[Path]:
     reaction_manifest = _read_json(index_dir / "index_manifest.json")
     files = [index_dir / "index_manifest.json"]
     for shard in reaction_manifest.get("shards") or []:
         files.extend([index_dir / str(shard["vectors"]), index_dir / str(shard["metadata"])])
-    route_root = index_dir / "routes"
-    route_manifest = _read_json(route_root / "route_index_manifest.json")
-    files.extend(
-        [
-            route_root / "route_index_manifest.json",
-            route_root / "route_embeddings.npz",
-            route_root / "route_metadata.jsonl",
-        ]
-    )
-    # Make sure manifest references remain meaningful even if names evolve.
-    for field in ("vectors", "metadata"):
-        name = route_manifest.get(field)
-        if name:
-            files.append(route_root / str(name))
     unique: dict[str, Path] = {}
     for path in files:
         unique[path.resolve().as_posix()] = path
     return list(unique.values())
 
 
+def _extract_route_vectors_to_npy(source: Path, destination: Path) -> dict[str, Any]:
+    """Extract the dense route matrix as an mmap-capable NPY file.
+
+    ``np.savez_compressed`` stores each array as an NPY member inside a ZIP
+    container. Streaming that member avoids allocating the full route matrix
+    while converting the locked source index into inference-safe storage.
+    """
+    if not source.is_file():
+        raise ArtifactContractError(f"Required route vector artifact is missing: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if source.suffix.lower() == ".npy":
+        _copy_file(source, destination)
+    elif source.suffix.lower() == ".npz":
+        with zipfile.ZipFile(source) as archive:
+            members = [name for name in archive.namelist() if name == "vectors.npy"]
+            if len(members) != 1:
+                raise ArtifactContractError(
+                    f"Expected exactly one vectors.npy member in route index: {source}"
+                )
+            with archive.open(members[0], "r") as input_handle, destination.open("wb") as output_handle:
+                shutil.copyfileobj(input_handle, output_handle, length=8 * 1024 * 1024)
+    else:
+        raise ArtifactContractError(f"Unsupported source route vector storage: {source}")
+    vectors = np.load(destination, mmap_mode="r", allow_pickle=False)
+    try:
+        if vectors.ndim != 2:
+            raise ArtifactContractError(
+                f"Route vector matrix must be two-dimensional: {destination}"
+            )
+        if vectors.dtype != np.dtype(np.float32):
+            raise ArtifactContractError(
+                f"Route vector matrix must use float32: {destination} ({vectors.dtype})"
+            )
+        return {
+            "rows": int(vectors.shape[0]),
+            "dimensions": int(vectors.shape[1]),
+            "dtype": str(vectors.dtype),
+            "sha256": sha256_file(destination),
+        }
+    finally:
+        mmap_handle = getattr(vectors, "_mmap", None)
+        if mmap_handle is not None:
+            mmap_handle.close()
+
+
+def _route_vector_path(route_root: Path, route_manifest: dict[str, Any]) -> Path:
+    return route_root / str(route_manifest.get("vectors") or "route_embeddings.npz")
+
+
+def _route_metadata_path(route_root: Path, route_manifest: dict[str, Any]) -> Path:
+    return route_root / str(route_manifest.get("metadata") or "route_metadata.jsonl")
 
 
 def _copy_sqlite_snapshot(source: Path, destination: Path) -> None:
@@ -131,10 +175,23 @@ def _copy_sqlite_snapshot(source: Path, destination: Path) -> None:
 
 
 def _rebase_registry_database(path: Path, model_paths: dict[str, tuple[str, str | None]]) -> None:
+    # The source registry may preserve active runtime models from earlier dataset
+    # generations. The immutable inference bundle is dataset-scoped, so its
+    # derived SQLite registry must contain only the selected model records.
+    # This does not mutate the source registry or delete any source artifacts.
+    selected_model_ids = tuple(model_paths)
+    if not selected_model_ids:
+        raise ArtifactContractError("Cannot package an empty runtime model registry.")
+
     # Keep the packaged registry as one self-contained SQLite file. A copied
     # WAL-mode database can create -wal/-shm files when reopened; checkpoint it
     # and return to DELETE mode before closing the final writable connection.
     with closing(sqlite3.connect(path)) as conn:
+        placeholders = ",".join("?" for _ in selected_model_ids)
+        conn.execute(
+            f"DELETE FROM model_versions WHERE model_id NOT IN ({placeholders})",
+            selected_model_ids,
+        )
         for model_id, (artifact_path, card_path) in model_paths.items():
             conn.execute(
                 "UPDATE model_versions SET artifact_path=?, model_card_path=? WHERE model_id=?",
@@ -155,7 +212,7 @@ def _read_runtime_registry_database(path: Path) -> list[dict[str, Any]]:
         conn.execute("PRAGMA query_only=ON")
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT model_id, task, artifact_path, model_card_path, split_sha256 "
+            "SELECT model_id, task, dataset_version, artifact_path, model_card_path, split_sha256 "
             "FROM model_versions WHERE runtime_load_required=1 "
             "AND lifecycle_state IN ('active','candidate') ORDER BY task"
         ).fetchall()
@@ -200,11 +257,14 @@ class ArtifactBundlePublisher:
         registry_json_source = self.settings.model_dir / "model_registry.json"
         registry_db_source = self.settings.registry_db
         registry = _read_json(registry_json_source)
-        runtime_models = _runtime_models(registry)
         split_manifest_source = self.settings.canonical_v2_dir / "split_manifest.json"
         final_manifest_source = self.settings.canonical_v2_dir / "dataset_manifest.json"
         split_manifest = _read_json(split_manifest_source)
         final_manifest = _read_json(final_manifest_source)
+        dataset_version = str(final_manifest.get("dataset_version") or "")
+        if not dataset_version:
+            raise ArtifactContractError("The canonical dataset manifest is missing dataset_version.")
+        runtime_models = _runtime_models(registry, dataset_version=dataset_version)
         reaction_manifest_source = self.settings.index_v2_dir / "index_manifest.json"
         route_manifest_source = self.settings.index_v2_dir / "routes" / "route_index_manifest.json"
         reaction_manifest = _read_json(reaction_manifest_source)
@@ -265,18 +325,61 @@ class ArtifactBundlePublisher:
                 if sidecar.exists():
                     sidecar.unlink()
 
-            for source in _index_files(self.settings.index_v2_dir):
+            for source in _reaction_index_files(self.settings.index_v2_dir):
                 relative = source.relative_to(self.settings.index_v2_dir)
                 _copy_file(source, stage / "indexes" / relative)
+
+            source_route_root = self.settings.index_v2_dir / "routes"
+            packaged_route_root = stage / "indexes" / "routes"
+            packaged_route_root.mkdir(parents=True, exist_ok=True)
+            source_route_vectors = _route_vector_path(source_route_root, route_manifest)
+            source_route_metadata = _route_metadata_path(source_route_root, route_manifest)
+            packaged_route_vectors = packaged_route_root / "route_embeddings.npy"
+            route_storage = _extract_route_vectors_to_npy(
+                source_route_vectors,
+                packaged_route_vectors,
+            )
+            if route_storage["rows"] != int(route_manifest.get("rows", -1)):
+                raise ArtifactContractError(
+                    "Route vector rows disagree with route_index_manifest.json."
+                )
+            if route_storage["dimensions"] != int(route_manifest.get("dimensions", -1)):
+                raise ArtifactContractError(
+                    "Route vector dimensions disagree with route_index_manifest.json."
+                )
+            packaged_route_metadata = packaged_route_root / "route_metadata.jsonl"
+            _copy_file(source_route_metadata, packaged_route_metadata)
+            packaged_route_manifest = {
+                **route_manifest,
+                "vectors": packaged_route_vectors.name,
+                "vectors_format": "npy_memmap_v1",
+                "vectors_sha256": route_storage["sha256"],
+                "vectors_dtype": route_storage["dtype"],
+                "metadata": packaged_route_metadata.name,
+                "metadata_sha256": sha256_file(packaged_route_metadata),
+                "search_chunk_rows": 2_048,
+                "source_vectors_format": (
+                    "npy_memmap_v1" if source_route_vectors.suffix.lower() == ".npy" else "npz_dense_v1"
+                ),
+                "source_vectors_sha256": sha256_file(source_route_vectors),
+            }
+            packaged_route_manifest_path = packaged_route_root / "route_index_manifest.json"
+            packaged_route_manifest_path.write_text(
+                json.dumps(packaged_route_manifest, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
 
             contract_targets = {
                 "dataset_manifest.json": final_manifest_source,
                 "split_manifest.json": split_manifest_source,
                 "reaction_index_manifest.json": reaction_manifest_source,
-                "route_index_manifest.json": route_manifest_source,
             }
             for name, source in contract_targets.items():
                 _copy_file(source, stage / "contracts" / name)
+            _copy_file(
+                packaged_route_manifest_path,
+                stage / "contracts" / "route_index_manifest.json",
+            )
 
             environment = registry.get("runtime_environment") or runtime_environment()
             (stage / "environment" / "runtime_versions.json").write_text(
@@ -290,7 +393,7 @@ class ArtifactBundlePublisher:
                 "created_at_utc": datetime.now(timezone.utc).isoformat(),
                 "compatible_service_version": compatible_service_version,
                 "source_service_version": __version__,
-                "dataset_version": final_manifest.get("dataset_version", "uspto_multistep_contextual_v2"),
+                "dataset_version": dataset_version,
                 "training_split_sha256": split_manifest.get("training_split_sha256"),
                 "canonical_manifest_sha256": sha256_file(stage / "contracts" / "dataset_manifest.json"),
                 "split_manifest_sha256": sha256_file(stage / "contracts" / "split_manifest.json"),
@@ -306,6 +409,18 @@ class ArtifactBundlePublisher:
                 },
                 "required_tasks": sorted(str(model["task"]) for model in rebased_models),
                 "runtime_model_count": len(rebased_models),
+                "model_selection": {
+                    "dataset_version": dataset_version,
+                    "runtime_load_required": True,
+                    "lifecycle_states": ["active", "candidate"],
+                    "source_runtime_model_count": sum(
+                        1
+                        for model in registry.get("models") or []
+                        if bool(model.get("runtime_load_required"))
+                        and model.get("lifecycle_state") in {"active", "candidate"}
+                    ),
+                    "selected_runtime_model_count": len(rebased_models),
+                },
                 "paths": {
                     "model_registry": "models/model_registry.json",
                     "registry_database": "registry/reacts.sqlite3",
@@ -334,7 +449,12 @@ class ArtifactBundlePublisher:
                 },
                 "index_contract": {
                     "reaction_training_split_sha256": reaction_manifest.get("training_split_sha256"),
-                    "route_training_split_sha256": route_manifest.get("training_split_sha256"),
+                    "route_training_split_sha256": packaged_route_manifest.get("training_split_sha256"),
+                    "route_vectors_format": packaged_route_manifest.get("vectors_format"),
+                    "route_vectors_file": packaged_route_manifest.get("vectors"),
+                    "route_vectors_rows": packaged_route_manifest.get("rows"),
+                    "route_vectors_dimensions": packaged_route_manifest.get("dimensions"),
+                    "route_vectors_memory_mapped": True,
                 },
             }
             (stage / "artifact_manifest.json").write_text(
@@ -342,7 +462,7 @@ class ArtifactBundlePublisher:
                 encoding="utf-8",
             )
             _write_checksums(stage)
-            validation = ArtifactBundleValidator(stage).validate(service_version="2.1.0")
+            validation = ArtifactBundleValidator(stage).validate(service_version=__version__)
             if not validation["pass"]:
                 raise ArtifactContractError(f"Packaged artifact bundle failed validation: {validation['failures']}")
 
@@ -372,7 +492,7 @@ class ArtifactBundlePublisher:
             "artifact_manifest_sha256": sha256_file(final_root / "artifact_manifest.json"),
             "sha256sums_sha256": sha256_file(final_root / "SHA256SUMS"),
             "runtime_models": len(runtime_models),
-            "validation": ArtifactBundleValidator(final_root).validate(service_version="2.1.0"),
+            "validation": ArtifactBundleValidator(final_root).validate(service_version=__version__),
         }
 
 
@@ -502,13 +622,20 @@ class ArtifactBundleValidator:
         registry = _read_json(resolved["model_registry"]) if resolved.get("model_registry", Path()).is_file() else {}
         models: list[dict[str, Any]] = []
         try:
-            models = _runtime_models(registry)
+            models = _runtime_models(
+                registry,
+                dataset_version=str(manifest.get("dataset_version") or "") or None,
+            )
         except ArtifactContractError as exc:
             failures.append(str(exc))
         required_tasks = sorted(str(value) for value in manifest.get("required_tasks") or [])
         actual_tasks = sorted(str(model.get("task")) for model in models)
         if required_tasks != actual_tasks:
             failures.append(f"Required task set mismatch: manifest={required_tasks}, registry={actual_tasks}")
+        if manifest.get("runtime_model_count") != len(models):
+            failures.append(
+                f"Runtime model count mismatch: manifest={manifest.get('runtime_model_count')}, registry={len(models)}"
+            )
 
         database_models: list[dict[str, Any]] = []
         database_path = resolved.get("registry_database")
@@ -524,7 +651,7 @@ class ArtifactBundleValidator:
         for model_id in sorted(set(json_by_id) & set(database_by_id)):
             json_model = json_by_id[model_id]
             database_model = database_by_id[model_id]
-            for field in ("task", "artifact_path", "model_card_path", "split_sha256"):
+            for field in ("task", "dataset_version", "artifact_path", "model_card_path", "split_sha256"):
                 if (json_model.get(field) or None) != (database_model.get(field) or None):
                     failures.append(f"Registry database/JSON mismatch for {model_id}: {field}")
 
@@ -539,7 +666,52 @@ class ArtifactBundleValidator:
         if route.get("training_split_sha256") != split_hash:
             failures.append("Route index is not bound to the artifact training split.")
 
+        route_manifest_path = resolved.get("route_index")
+        if route_manifest_path and route_manifest_path.is_file():
+            route_root = route_manifest_path.parent
+            route_vectors = _route_vector_path(route_root, route)
+            route_metadata = _route_metadata_path(route_root, route)
+            if not route_vectors.is_file():
+                failures.append(f"Route vector artifact is missing: {route_vectors.name}")
+            else:
+                expected_vector_hash = route.get("vectors_sha256")
+                if expected_vector_hash and sha256_file(route_vectors) != expected_vector_hash:
+                    failures.append("Route vector artifact hash mismatch.")
+                if route.get("vectors_format") == "npy_memmap_v1":
+                    if route_vectors.suffix.lower() != ".npy":
+                        failures.append("Memory-mapped route vectors must use NPY storage.")
+                    else:
+                        try:
+                            vectors = np.load(route_vectors, mmap_mode="r", allow_pickle=False)
+                            try:
+                                expected_shape = (
+                                    int(route.get("rows", -1)),
+                                    int(route.get("dimensions", -1)),
+                                )
+                                actual_shape = tuple(int(value) for value in vectors.shape)
+                                if actual_shape != expected_shape:
+                                    failures.append(
+                                        f"Route vector shape mismatch: expected={expected_shape}, actual={actual_shape}"
+                                    )
+                                if vectors.dtype != np.dtype(np.float32):
+                                    failures.append(
+                                        f"Route vector dtype mismatch: expected=float32, actual={vectors.dtype}"
+                                    )
+                            finally:
+                                mmap_handle = getattr(vectors, "_mmap", None)
+                                if mmap_handle is not None:
+                                    mmap_handle.close()
+                        except (OSError, ValueError) as exc:
+                            failures.append(f"Route vector artifact cannot be memory-mapped: {exc}")
+            if not route_metadata.is_file():
+                failures.append(f"Route metadata artifact is missing: {route_metadata.name}")
+            elif route.get("metadata_sha256") and sha256_file(route_metadata) != route.get("metadata_sha256"):
+                failures.append("Route metadata artifact hash mismatch.")
+
+        artifact_dataset_version = str(manifest.get("dataset_version") or "")
         for model in models:
+            if str(model.get("dataset_version") or "") != artifact_dataset_version:
+                failures.append(f"Model dataset mismatch: {model.get('model_id')}")
             if model.get("split_sha256") != split_hash:
                 failures.append(f"Model split mismatch: {model.get('model_id')}")
             try:

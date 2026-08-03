@@ -5,7 +5,7 @@
 Deploy an explicit pair:
 
 ```text
-service-v2.1.0 + product-two-artifacts-v2.0.12
+service-v2.1.0 + product-two-artifacts-v2.0.12-r1
 ```
 
 Never deploy an unversioned `latest` artifact pointer. Keep the previous known-good service image and exact artifact release available until the new release completes staging soak.
@@ -32,7 +32,11 @@ Start with an empty artifact cache and verify:
 - `/ready` remains 503 until warm-up succeeds;
 - `/ready` becomes 200 after all required models and indexes load;
 - `/api/v2/artifacts` reports the intended release and split hash;
-- `/api/v2/models` reports the expected governed capability set.
+- `/api/v2/models` reports the expected governed capability set;
+- readiness reports `route_index_storage.memory_mapped=true`;
+- resident memory does not increase by the full 2.38 GiB route-matrix size.
+
+Ensure the staging host has enough free disk for the compressed source, temporary extraction, expanded route matrix, and installed cache. Use `product-two-artifacts-v2.0.12-r1`; do not reuse a cache directory containing the superseded non-mmap release under the old identifier.
 
 ### Warm cache restart
 
@@ -77,8 +81,8 @@ Prepare a validated directory bundle, then build:
 ```bash
 docker build \
   -f Dockerfile.hermetic \
-  --build-arg ARTIFACT_RELEASE=product-two-artifacts-v2.0.12 \
-  --build-arg ARTIFACT_BUNDLE=dist/artifacts/product-two-artifacts-v2.0.12 \
+  --build-arg ARTIFACT_RELEASE=product-two-artifacts-v2.0.12-r1 \
+  --build-arg ARTIFACT_BUNDLE=dist/artifacts/product-two-artifacts-v2.0.12-r1 \
   -t routelens-service:2.1.0-artifacts-v2.0.12 .
 ```
 

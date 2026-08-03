@@ -69,6 +69,8 @@ class Application:
 
 
     def close(self) -> None:
+        if self.route_index is not None:
+            self.route_index.close()
         self.jobs.shutdown()
 
     @property
@@ -93,7 +95,7 @@ class Application:
         if state.artifact_root is None:
             return state.public()
         loaded_models: list[str] = []
-        loading_task: str | None = None
+        loading_component: str | None = None
         try:
             records = self.registry.list_models(runtime_only=True)
             expected_tasks = sorted(str(value) for value in state.manifest.get("required_tasks") or [])
@@ -101,18 +103,25 @@ class Application:
             if expected_tasks != actual_tasks:
                 raise RuntimeError(f"Runtime task mismatch: expected={expected_tasks}, actual={actual_tasks}")
             for record in records:
-                loading_task = str(record.get("task") or "unknown")
+                loading_component = f"model:{record.get('task') or 'unknown'}"
                 joblib.load(self.registry.resolve_artifact_path(record["artifact_path"]))
                 loaded_models.append(str(record["model_id"]))
+            loading_component = "reaction_index"
             index = self.contextual_inference._load_index()
             if index is None:
                 raise FileNotFoundError(self.settings.index_v2_dir / "index_manifest.json")
+            loading_component = "route_index"
             self.route_index = RouteEmbeddingIndex(self.settings.index_v2_dir)
+            route_storage = self.route_index.storage_info(sample=True)
+            # Readiness verifies one mapped row, then releases the file handle.
+            # Route retrieval reopens the map lazily and shutdown closes it.
+            self.route_index.close()
             state.warmup = {
                 "models_loaded": len(loaded_models),
                 "model_ids": loaded_models,
                 "reaction_index_version": index.manifest.get("index_version"),
                 "route_index_version": self.route_index.manifest.get("index_version"),
+                "route_index_storage": route_storage,
             }
             state.warmed_up = True
             state.ready = True
@@ -126,8 +135,10 @@ class Application:
             state.warmup = {
                 "models_loaded": len(loaded_models),
                 "model_ids": loaded_models,
-                "failed_task": loading_task,
+                "failed_component": loading_component,
             }
+            if loading_component and loading_component.startswith("model:"):
+                state.warmup["failed_task"] = loading_component.split(":", 1)[1]
         return state.public()
 
     def readiness(self) -> dict[str, Any]:

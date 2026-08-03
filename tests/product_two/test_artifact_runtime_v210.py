@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 from pathlib import Path
 
 import joblib
@@ -198,6 +199,86 @@ def _package(tmp_path: Path, monkeypatch) -> tuple[Path, str]:
     return Path(result["bundle_path"]), release
 
 
+def test_publisher_scopes_runtime_registry_to_canonical_dataset(tmp_path: Path, monkeypatch) -> None:
+    declared = {**runtime_environment(), "scikit_learn": SCIKIT_LEARN_PIN}
+    monkeypatch.setattr("reacts.artifacts.bundle.runtime_environment", lambda: declared)
+    source = _source_runtime(tmp_path / "source-mixed-registry")
+
+    current_artifact = source.model_dir / "reaction_family" / "model.joblib"
+    legacy_artifact = source.model_dir / "agent_presence" / "legacy.joblib"
+    legacy_artifact.parent.mkdir(parents=True)
+    shutil.copy2(current_artifact, legacy_artifact)
+    _write_json(legacy_artifact.with_suffix(".model_card.json"), {"task": "agent_presence"})
+
+    registry = Registry(source.registry_db)
+    legacy = registry.register_model(
+        task="agent_presence",
+        artifact_path=legacy_artifact,
+        dataset_version="uspto_multistep_canonical_v1",
+        metrics={"validation": {"rows": 2}},
+        config={"legacy_fixture": True},
+        stage=ModelStage.SCREENING,
+        split_sha256=None,
+        training_environment={
+            "python": "3.11.0",
+            "python_implementation": "CPython",
+            "platform": "legacy",
+            "scikit_learn": "1.4.0",
+            "numpy": "1.26.0",
+            "scipy": "1.11.0",
+            "joblib": "1.3.0",
+            "rdkit": "2023.9.1",
+        },
+    )
+    registry_json = json.loads((source.model_dir / "model_registry.json").read_text(encoding="utf-8"))
+    registry_json["runtime_environment"] = declared
+    (source.model_dir / "model_registry.json").write_text(
+        json.dumps(registry_json, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    source_registry_hash = sha256_file(source.registry_db)
+    source_json_hash = sha256_file(source.model_dir / "model_registry.json")
+    result = ArtifactBundlePublisher(source).package(
+        release="product-two-artifacts-mixed-registry-test",
+        destination=tmp_path / "dist",
+        archive=False,
+    )
+
+    bundle = Path(result["bundle_path"])
+    validation = ArtifactBundleValidator(bundle).validate(service_version="2.1.0")
+    assert validation["pass"] is True
+    assert validation["required_tasks"] == ["reaction_family"]
+    selection = validation["manifest"]["model_selection"]
+    assert selection == {
+        "dataset_version": "uspto_multistep_contextual_v2",
+        "runtime_load_required": True,
+        "lifecycle_states": ["active", "candidate"],
+        "source_runtime_model_count": 2,
+        "selected_runtime_model_count": 1,
+    }
+
+    packaged_registry = json.loads((bundle / "models" / "model_registry.json").read_text(encoding="utf-8"))
+    assert [model["task"] for model in packaged_registry["models"]] == ["reaction_family"]
+    assert legacy["model_id"] not in {model["model_id"] for model in packaged_registry["models"]}
+    assert not (bundle / "models" / "agent_presence").exists()
+
+    with sqlite3.connect(bundle / "registry" / "reacts.sqlite3") as connection:
+        runtime_rows = connection.execute(
+            "SELECT model_id, task, dataset_version FROM model_versions "
+            "WHERE runtime_load_required=1 ORDER BY task"
+        ).fetchall()
+        all_rows = connection.execute(
+            "SELECT model_id, task, dataset_version FROM model_versions ORDER BY task"
+        ).fetchall()
+    assert runtime_rows == all_rows
+    assert len(all_rows) == 1
+    assert all_rows[0][1:] == ("reaction_family", "uspto_multistep_contextual_v2")
+
+    assert sha256_file(source.registry_db) == source_registry_hash
+    assert sha256_file(source.model_dir / "model_registry.json") == source_json_hash
+
+
 def test_clean_room_bundle_resolution_readiness_and_golden_contract(tmp_path: Path, monkeypatch) -> None:
     bundle, release = _package(tmp_path, monkeypatch)
     monkeypatch.setattr("reacts.ml.inference.validate_runtime_environment", lambda _: {"pass": True})
@@ -330,7 +411,9 @@ def _refresh_checksums(bundle: Path) -> None:
 
 def test_missing_required_file_is_rejected(tmp_path: Path, monkeypatch) -> None:
     bundle, _ = _package(tmp_path, monkeypatch)
-    (bundle / "indexes" / "routes" / "route_embeddings.npz").unlink()
+    route_root = bundle / "indexes" / "routes"
+    route_manifest = json.loads((route_root / "route_index_manifest.json").read_text(encoding="utf-8"))
+    (route_root / route_manifest["vectors"]).unlink()
     result = ArtifactBundleValidator(bundle).validate(service_version="2.1.0")
     assert result["pass"] is False
     assert any("missing" in failure.lower() for failure in result["failures"])

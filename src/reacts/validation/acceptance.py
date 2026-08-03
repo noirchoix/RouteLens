@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-from fastapi.testclient import TestClient
 
 from reacts.ml.environment import runtime_environment, validate_runtime_environment
 from reacts.ml.registry import Registry
@@ -400,6 +399,8 @@ class ScientificAcceptanceValidator:
                 os.environ.pop(environment_key, None)
             else:
                 os.environ[environment_key] = previous
+
+        from fastapi.testclient import TestClient
 
         client = TestClient(create_app(self.settings, read_only_registry=True))
         health = client.get("/health")

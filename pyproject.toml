@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reacts-contextual-intelligence"
-version = "2.1.3"
+version = "2.1.5"
 description = "Enterprise-grade contextual USPTO reaction curation, structural mapping, ML governance, retrieval and inference platform"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -64,11 +64,11 @@ Package the locked v2.0.12 runtime artifacts:
 
 ```bash
 reacts --project-root . package-product-two-artifacts \
-  --release product-two-artifacts-v2.0.12 \
+  --release product-two-artifacts-v2.0.12-r1 \
   --destination dist/artifacts
 
 reacts --project-root . validate-artifact-bundle \
-  --bundle dist/artifacts/product-two-artifacts-v2.0.12
+  --bundle dist/artifacts/product-two-artifacts-v2.0.12-r1
 ```
 
 Start the v2.1.0 service against that exact release:
@@ -76,12 +76,14 @@ Start the v2.1.0 service against that exact release:
 ```bash
 reacts --project-root . serve \
   --artifact-uri dist/artifacts \
-  --artifact-release product-two-artifacts-v2.0.12 \
+  --artifact-release product-two-artifacts-v2.0.12-r1 \
   --require-artifacts \
   --port 8000
 ```
 
 `GET /health` reports process health. `GET /ready` returns success only after artifact verification and model/index warm-up. Artifact-dependent inference and retrieval endpoints return HTTP 503 while readiness is false.
+
+Product Two v2.1.5 converts the locked compressed route matrix into a standalone NPY payload while publishing the artifact bundle. The service memory-maps that matrix and scores it in bounded row chunks, so startup does not allocate the full 156,076 × 4,096 float32 route matrix. The `-r1` artifact suffix identifies this inference-storage correction without changing the underlying v2.0.12 models, routes, split, or scientific index values.
 
 The service distinguishes runtime readiness from scientific model promotion. Candidate and staging models retain explicit permitted-use declarations, warnings, lifecycle state, artifact release, and training-split provenance in every response. Superseded and incompatible artifacts are never loaded.
 

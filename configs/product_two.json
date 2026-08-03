@@ -94,7 +94,7 @@
   "artifact_runtime": {
     "schema_version": "2.1.0-artifact-bundle-v1",
     "service_version_range": ">=2.1.0,<2.2.0",
-    "source_artifact_release": "product-two-artifacts-v2.0.12",
+    "source_artifact_release": "product-two-artifacts-v2.0.12-r1",
     "startup": "verified_exact_release_only",
     "registry_mode": "read_only",
     "cache_install": "atomic",

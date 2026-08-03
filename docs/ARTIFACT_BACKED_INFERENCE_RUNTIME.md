@@ -1,3 +1,7 @@
+## Dataset-scoped model selection
+
+The publisher treats the canonical `dataset_manifest.json` as the authority for the bundle dataset version. Only records that are runtime-load-required, in an active/candidate lifecycle, and bound to that exact dataset version are eligible for packaging. Active records from earlier dataset generations remain preserved in the source JSON/SQLite registry but are not copied into the bundle, are not deserialized, and do not appear in the derived read-only runtime registry. Same-dataset split or environment mismatches remain hard validation failures.
+
 # Product Two v2.1.0 — Artifact-Backed Inference Runtime
 
 ## Purpose
@@ -22,6 +26,9 @@ The publisher creates:
 │   ├── shard-*.npz
 │   ├── shard-*.jsonl
 │   └── routes/
+│       ├── route_index_manifest.json
+│       ├── route_embeddings.npy
+│       └── route_metadata.jsonl
 ├── registry/
 │   └── reacts.sqlite3
 ├── contracts/
@@ -34,6 +41,12 @@ The publisher creates:
 ```
 
 The SQLite registry is included because inference needs the authoritative queryable lifecycle records. It is copied through SQLite's backup API, rebased to bundle-relative model paths, and opened with immutable query-only connections at runtime.
+
+### Route-vector storage
+
+The locked source route index stores 156,076 × 4,096 float32 values inside a compressed NPZ container. Loading the `vectors` member normally materializes approximately 2.38 GiB at once. During artifact publication, Product Two v2.1.5 streams the embedded `vectors.npy` member directly to `route_embeddings.npy`; it does not rebuild routes or recalculate vector values. Runtime warm-up memory-maps that NPY file, verifies its shape, dtype, hash, and one readable row, then releases the handle. Route retrieval reopens the map lazily and computes similarity in bounded chunks.
+
+The corrected distribution uses the release identifier `product-two-artifacts-v2.0.12-r1`. Treat the earlier non-mmap bundle as superseded for deployment, even though its scientific hashes and models remain valid.
 
 The formal manifest schema is `docs/schemas/product_two_artifact_manifest_v1.schema.json`.
 
@@ -52,7 +65,7 @@ Run these commands from the locked runtime checkout that contains the verified v
 
 ```bash
 reacts --project-root . package-product-two-artifacts \
-  --release product-two-artifacts-v2.0.12 \
+  --release product-two-artifacts-v2.0.12-r1 \
   --destination dist/artifacts
 ```
 
@@ -60,7 +73,7 @@ The command creates a directory, a ZIP archive, and a companion ZIP SHA-256 file
 
 ```bash
 reacts --project-root . validate-artifact-bundle \
-  --bundle dist/artifacts/product-two-artifacts-v2.0.12
+  --bundle dist/artifacts/product-two-artifacts-v2.0.12-r1
 ```
 
 The validator fails closed for:
@@ -74,7 +87,8 @@ The validator fails closed for:
 - model artifact hash mismatch;
 - disagreement between the SQLite and JSON registries;
 - registry, split, reaction-index, and route-index split mismatch;
-- missing required runtime tasks.
+- missing required runtime tasks;
+- route-vector hash, shape, dtype, or memory-mapped storage mismatch.
 
 ## Resolve and serve
 
@@ -105,7 +119,7 @@ Start the service:
 ```bash
 reacts --project-root . serve \
   --artifact-uri dist/artifacts \
-  --artifact-release product-two-artifacts-v2.0.12 \
+  --artifact-release product-two-artifacts-v2.0.12-r1 \
   --require-artifacts \
   --port 8000
 ```
@@ -114,7 +128,7 @@ Offline startup requires the exact release to exist in the cache:
 
 ```bash
 reacts --project-root . serve \
-  --artifact-release product-two-artifacts-v2.0.12 \
+  --artifact-release product-two-artifacts-v2.0.12-r1 \
   --artifact-cache-dir data/artifact_cache \
   --offline \
   --require-artifacts
@@ -133,7 +147,8 @@ The runtime contract compares Python major/minor and exact scikit-learn, NumPy, 
 - the exact bundle is installed and verified;
 - the runtime registry is readable and immutable;
 - required active models are present and deserializable;
-- reaction and route indexes are loadable;
+- the reaction index manifest is loadable;
+- the route matrix is mmap-capable and one bounded sample row is readable;
 - registry and index split hashes match;
 - warm-up has completed.
 
