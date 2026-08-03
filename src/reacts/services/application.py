@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import json
+
+import joblib
 from pathlib import Path
 from typing import Any
 
+from reacts import __version__
+from reacts.artifacts.bundle import ArtifactBundlePublisher, ArtifactBundleValidator
+from reacts.artifacts.runtime import ArtifactRuntimeState, bootstrap_artifact_runtime
 from reacts.data.canonical import CanonicalBuildConfig, CanonicalBuilder
 from reacts.data.canonical_v2 import ContextualBuildConfig, ContextualCanonicalBuilder
 from reacts.data.split_governance import ProductTwoSplitRebuilder
@@ -11,7 +16,8 @@ from reacts.data.source import ArtifactSource
 from reacts.ml.anomaly import ConditionAnomalyModel, RouteQualityScorer
 from reacts.chemistry.repair import deterministic_repair_candidates
 from reacts.ml.inference import ContextualInferenceService, InferenceService
-from reacts.ml.registry import Registry
+from reacts.ml.capabilities import model_capability
+from reacts.ml.registry import Registry, UnavailableRegistry
 from reacts.ml.specialists import SpecialistTrainer
 from reacts.ml.training import Trainer, TrainingConfig
 from reacts.mapping.benchmark import MappingBenchmarkConfig, benchmark_mapper
@@ -19,7 +25,7 @@ from reacts.mapping.derivation import DerivationConfig, ReactionCentreDeriver
 from reacts.mapping.runner import MappingRunConfig, ResumableMappingRunner
 from reacts.retrieval.contextual_index import ContextualFingerprintIndexBuilder, ContextualIndexBuildConfig
 from reacts.retrieval.fingerprint_index import FingerprintIndexBuilder, IndexBuildConfig
-from reacts.retrieval.route_index import RouteEmbeddingIndexBuilder, RouteIndexBuildConfig
+from reacts.retrieval.route_index import RouteEmbeddingIndex, RouteEmbeddingIndexBuilder, RouteIndexBuildConfig
 from reacts.science.baseline import freeze_product_one_baseline
 from reacts.science.release import lock_product_two_release
 from reacts.services.jobs import JobManager
@@ -30,19 +36,178 @@ from reacts.validation.acceptance import ScientificAcceptanceValidator
 
 class Application:
     def __init__(self, settings: Settings, *, read_only_registry: bool = False):
-        self.settings = settings
-        self.registry = Registry(settings.registry_db, read_only=read_only_registry)
+        original = settings.resolve()
+        bound, artifact_runtime = bootstrap_artifact_runtime(original, service_version=__version__)
+        self.settings = bound
+        self.artifact_runtime = artifact_runtime
+        artifact_read_only = artifact_runtime.configured
+        if artifact_runtime.configured and artifact_runtime.artifact_root is None:
+            self.registry = UnavailableRegistry(artifact_runtime.detail or "artifact startup failed")
+        else:
+            self.registry = Registry(
+                bound.registry_db,
+                read_only=read_only_registry or artifact_read_only,
+                project_root=artifact_runtime.artifact_root or bound.project_root,
+                model_dir=bound.model_dir,
+            )
         self.jobs = JobManager(self.registry)
-        self.inference = InferenceService(self.registry, settings.index_dir)
+        self.inference = InferenceService(self.registry, bound.index_dir)
         self.contextual_inference = ContextualInferenceService(
             self.registry,
-            settings.index_v2_dir,
-            in_domain_threshold=settings.evidence_in_domain_threshold,
-            weak_threshold=settings.evidence_weak_threshold,
-            abstention_threshold=settings.inference_abstention_threshold,
+            bound.index_v2_dir,
+            in_domain_threshold=bound.evidence_in_domain_threshold,
+            weak_threshold=bound.evidence_weak_threshold,
+            abstention_threshold=bound.inference_abstention_threshold,
+            artifact_release=artifact_runtime.artifact_release,
+            training_split_sha256=artifact_runtime.manifest.get("training_split_sha256"),
         )
-        self.routes = RouteRepository(settings.canonical_dir)
-        self.contextual_routes = RouteRepository(settings.canonical_v2_dir)
+        self.routes = RouteRepository(bound.canonical_dir)
+        self.contextual_routes = RouteRepository(bound.canonical_v2_dir)
+        self.route_index: RouteEmbeddingIndex | None = None
+        if artifact_runtime.configured and artifact_runtime.artifact_root is not None and bound.artifact_warmup:
+            self.initialize_artifact_runtime()
+
+
+    def close(self) -> None:
+        self.jobs.shutdown()
+
+    @property
+    def artifact_mode(self) -> bool:
+        return self.artifact_runtime.configured
+
+    def ensure_ready(self) -> None:
+        if not self.artifact_runtime.ready:
+            detail = self.artifact_runtime.detail or "Artifact-backed runtime is not ready."
+            raise RuntimeError(f"{self.artifact_runtime.reason_code or 'service_not_ready'}: {detail}")
+
+    def ensure_mutable(self) -> None:
+        if self.artifact_mode or getattr(self.registry, "read_only", False):
+            raise PermissionError("Artifact-backed inference runtime is read-only; training and build jobs are disabled.")
+
+    def initialize_artifact_runtime(self) -> dict[str, Any]:
+        state = self.artifact_runtime
+        if not state.configured:
+            state.ready = True
+            state.warmed_up = True
+            return state.public()
+        if state.artifact_root is None:
+            return state.public()
+        loaded_models: list[str] = []
+        loading_task: str | None = None
+        try:
+            records = self.registry.list_models(runtime_only=True)
+            expected_tasks = sorted(str(value) for value in state.manifest.get("required_tasks") or [])
+            actual_tasks = sorted(str(record.get("task")) for record in records)
+            if expected_tasks != actual_tasks:
+                raise RuntimeError(f"Runtime task mismatch: expected={expected_tasks}, actual={actual_tasks}")
+            for record in records:
+                loading_task = str(record.get("task") or "unknown")
+                joblib.load(self.registry.resolve_artifact_path(record["artifact_path"]))
+                loaded_models.append(str(record["model_id"]))
+            index = self.contextual_inference._load_index()
+            if index is None:
+                raise FileNotFoundError(self.settings.index_v2_dir / "index_manifest.json")
+            self.route_index = RouteEmbeddingIndex(self.settings.index_v2_dir)
+            state.warmup = {
+                "models_loaded": len(loaded_models),
+                "model_ids": loaded_models,
+                "reaction_index_version": index.manifest.get("index_version"),
+                "route_index_version": self.route_index.manifest.get("index_version"),
+            }
+            state.warmed_up = True
+            state.ready = True
+            state.reason_code = None
+            state.detail = None
+        except Exception as exc:
+            state.ready = False
+            state.warmed_up = False
+            state.reason_code = "artifact_warmup_failed"
+            state.detail = str(exc)
+            state.warmup = {
+                "models_loaded": len(loaded_models),
+                "model_ids": loaded_models,
+                "failed_task": loading_task,
+            }
+        return state.public()
+
+    def readiness(self) -> dict[str, Any]:
+        if not self.artifact_runtime.configured:
+            return {
+                "ready": True,
+                "mode": "local_unmanaged",
+                "reason_code": None,
+                "version": __version__,
+            }
+        return {"version": __version__, **self.artifact_runtime.public()}
+
+    def artifact_info(self) -> dict[str, Any]:
+        return {"service_version": __version__, **self.artifact_runtime.public(), "manifest": self.artifact_runtime.manifest}
+
+    def model_capabilities(self) -> list[dict[str, Any]]:
+        return [model_capability(record) for record in self.registry.list_models(runtime_only=True)]
+
+    def retrieve_reactions(
+        self,
+        reaction_smiles: str,
+        *,
+        k: int = 10,
+        minimum_quality: float | None = 0.35,
+    ) -> dict[str, Any]:
+        self.ensure_ready()
+        index = self.contextual_inference._load_index()
+        if index is None:
+            raise FileNotFoundError("Product Two reaction index is unavailable.")
+        results = index.search(reaction_smiles, k=k, minimum_quality=minimum_quality)
+        return {
+            "artifact_release": self.artifact_runtime.artifact_release,
+            "training_split_sha256": self.artifact_runtime.manifest.get("training_split_sha256"),
+            "index_version": index.manifest.get("index_version"),
+            "count": len(results),
+            "results": results,
+        }
+
+    def get_contextual_route(self, route_id: str) -> dict[str, Any] | None:
+        if self.artifact_mode:
+            self.ensure_ready()
+            if self.route_index is None:
+                self.route_index = RouteEmbeddingIndex(self.settings.index_v2_dir)
+            return self.route_index.get_route(route_id)
+        return self.contextual_routes.get_route(route_id)
+
+    def retrieve_routes(self, reaction_smiles: str, *, k: int = 10) -> dict[str, Any]:
+        self.ensure_ready()
+        if self.route_index is None:
+            self.route_index = RouteEmbeddingIndex(self.settings.index_v2_dir)
+        results = self.route_index.search_reaction(reaction_smiles, k=k)
+        return {
+            "artifact_release": self.artifact_runtime.artifact_release,
+            "training_split_sha256": self.artifact_runtime.manifest.get("training_split_sha256"),
+            "index_version": self.route_index.manifest.get("index_version"),
+            "count": len(results),
+            "results": results,
+        }
+
+    def package_product_two_artifacts(
+        self,
+        *,
+        release: str,
+        destination: Path,
+        compatible_service_version: str = ">=2.1.0,<2.2.0",
+        archive: bool = True,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        self.ensure_mutable()
+        return ArtifactBundlePublisher(self.settings).package(
+            release=release,
+            destination=destination,
+            compatible_service_version=compatible_service_version,
+            archive=archive,
+            overwrite=overwrite,
+        )
+
+    @staticmethod
+    def validate_artifact_bundle(bundle: Path, *, service_version: str = __version__) -> dict[str, Any]:
+        return ArtifactBundleValidator(bundle).validate(service_version=service_version)
 
     def dataset_manifest(self, version: str = "v1") -> dict[str, Any] | None:
         root = self.settings.canonical_v2_dir if version == "v2" else self.settings.canonical_dir

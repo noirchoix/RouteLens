@@ -1,3 +1,46 @@
+# Product Two v2.1.3 — Windows Artifact URI Resolution Hotfix
+
+## Corrected
+
+- Detects absolute Windows drive-letter and UNC artifact paths before URI parsing.
+- Prevents local paths such as `C:\\artifacts` from being rejected as unsupported URI scheme `c`.
+- Restores exact-release resolution, readiness, cache reuse, and contextual inference on Windows.
+- Preserves artifact hashes, registries, indexes, models, splits, mapping, and derivation outputs.
+
+# Product Two v2.1.2 — Windows SQLite Artifact Packaging Hotfix
+
+## Corrected
+
+- Explicitly closes every SQLite connection used to snapshot, rebase, and validate artifact registries.
+- Checkpoints copied WAL-mode registries and returns them to DELETE journal mode before packaging.
+- Prevents Windows `WinError 32` failures when removing staged `reacts.sqlite3-wal`, moving the verified bundle, or cleaning temporary directories.
+- Preserves the immutable single-file registry contract; no model, index, split, mapping, or derivation rebuild is performed.
+
+# REACTS Product Two v2.1.1
+
+## FastAPI lifespan compatibility hotfix
+
+- Replaces the removed `FastAPI.add_event_handler()` shutdown registration with the supported `lifespan` context-manager contract.
+- Preserves deterministic `Application.close()` cleanup on ASGI shutdown.
+- Restores import and test collection compatibility with current FastAPI/Starlette releases.
+- Does not alter artifact bundles, registries, indexes, models, inference contracts, mapping, derivation, or scientific governance.
+
+# REACTS Product Two v2.1.0
+
+## Artifact-backed inference runtime
+
+- Adds an immutable artifact-bundle publisher with complete SHA-256 coverage, active-model filtering, SQLite snapshotting, relative-path rebasing, environment capture, and manifest contracts.
+- Adds a fail-closed bundle validator for service compatibility, Python major/minor and exact numerical/model-library versions, JSON/SQLite registry agreement, model hashes and cards, required tasks, and registry/index/split provenance.
+- Adds exact-release resolution from local directories, ZIP files, `file://`, HTTP, or HTTPS; safe extraction; cache locking; double verification; atomic installation; and strict offline cache behavior.
+- Binds artifact-backed startup to a read-only immutable registry and bundle-local model, reaction-index, route-index, and contract paths.
+- Separates `/health` from artifact-gated `/ready`; inference and retrieval remain unavailable until verification and warm-up complete.
+- Adds `/api/v2/artifacts`, `/api/v2/models`, reaction retrieval, and route retrieval endpoints.
+- Extends inference responses with model ID, lifecycle, permitted use, artifact release, training split, warnings, evidence requirements, and candidate/staging governance.
+- Adds request-size, batch-size, timeout, concurrency, rate-limit, CORS, trusted-host, request-ID, and read-only-job controls.
+- Adds Prometheus readiness, artifact verification, model load, inference, retrieval, and active-model metrics.
+- Adds thin and hermetic production images, staging/rollback procedures, a benchmark script, a formal artifact-manifest schema, golden structural fixtures, and clean-room/failure-mode tests.
+- Does not rebuild or alter mapping, derivation, canonical chemistry, governed splits, indexes, or trained model science.
+
 # REACTS Product Two v2.0.12
 
 - Makes the top-level `validate-product-two` CLI dispatch read-only before any application or registry object is constructed.

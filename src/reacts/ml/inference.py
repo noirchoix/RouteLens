@@ -16,6 +16,7 @@ from reacts.contracts import (
     PredictionItem,
     TaskPrediction,
 )
+from reacts.ml.capabilities import model_capability
 from reacts.ml.environment import validate_runtime_environment
 from reacts.ml.registry import Registry
 from reacts.retrieval.contextual_index import (
@@ -188,12 +189,16 @@ class ContextualInferenceService:
         in_domain_threshold: float = 0.65,
         weak_threshold: float = 0.35,
         abstention_threshold: float = 0.35,
+        artifact_release: str | None = None,
+        training_split_sha256: str | None = None,
     ):
         self.registry = registry
         self.index_dir = Path(index_dir)
         self.in_domain_threshold = in_domain_threshold
         self.weak_threshold = weak_threshold
         self.abstention_threshold = abstention_threshold
+        self.artifact_release = artifact_release
+        self.training_split_sha256 = training_split_sha256
         self._models: dict[tuple[str, bool], tuple[dict[str, Any], dict[str, Any]]] = {}
         self._index: ContextualFingerprintIndex | None = None
         self._mapper = AtomMappingEngine("auto")
@@ -207,9 +212,15 @@ class ContextualInferenceService:
         key = (task, allow_experimental)
         if key in self._models:
             return self._models[key]
-        allowed = [ModelStage.PRODUCTION, ModelStage.STAGING, ModelStage.SCREENING, ModelStage.BASELINE]
+        allowed = [
+            ModelStage.PRODUCTION,
+            ModelStage.STAGING,
+            ModelStage.SCREENING,
+            ModelStage.BASELINE,
+            ModelStage.CANDIDATE,
+        ]
         if allow_experimental:
-            allowed.extend([ModelStage.VALIDATED, ModelStage.EXPERIMENTAL, ModelStage.CANDIDATE])
+            allowed.extend([ModelStage.VALIDATED, ModelStage.EXPERIMENTAL])
         record = self.registry.model_for_task(task, allowed_stages=tuple(allowed))
         if record is None:
             return None
@@ -398,6 +409,29 @@ class ContextualInferenceService:
             units=bundle.get("units"),
         )
 
+    def _govern_task_prediction(
+        self,
+        prediction: TaskPrediction,
+        record: dict[str, Any],
+        *,
+        evidence_present: bool,
+    ) -> TaskPrediction:
+        capability = model_capability(record)
+        prediction.model_id = str(record.get("model_id"))
+        prediction.lifecycle_state = str(record.get("lifecycle_state") or "active")
+        prediction.permitted_use = str(capability["permitted_use"])
+        prediction.artifact_release = self.artifact_release
+        prediction.training_split_sha256 = str(record.get("split_sha256") or self.training_split_sha256 or "") or None
+        warning = capability.get("warning")
+        if warning:
+            prediction.warnings.append(str(warning))
+        if capability["behavior"] == "retrieval_backed_suggestion" and not evidence_present:
+            prediction.abstained = True
+            prediction.reason = "Candidate-stage inference requires verified retrieval evidence."
+            prediction.predictions = []
+            prediction.warnings.append("No evidence was available to support candidate-stage suggestions.")
+        return prediction
+
     def predict(
         self,
         reaction_smiles: str,
@@ -459,6 +493,8 @@ class ContextualInferenceService:
             "models": {},
             "retrieval_index": index.manifest.get("index_version") if index else None,
             "dataset_version": index.manifest.get("dataset_version") if index else None,
+            "artifact_release": self.artifact_release,
+            "training_split_sha256": self.training_split_sha256,
         }
         for task in tasks:
             if not parsed.parse_ok and task in blocked_tasks:
@@ -497,7 +533,11 @@ class ContextualInferenceService:
                 result = self._classification_prediction(
                     task, record, bundle, reaction_smiles, canonical, distributions, evidence_raw, family, applicability
                 )
+            result = self._govern_task_prediction(result, record, evidence_present=bool(evidence_raw))
             task_results.append(result)
+            capability = model_capability(record)
+            if capability.get("warning"):
+                warnings.append(str(capability["warning"]))
             provenance["models"][task] = {
                 "model_id": record["model_id"],
                 "version": record["version"],
@@ -506,6 +546,8 @@ class ContextualInferenceService:
                 "artifact_sha256": record.get("artifact_sha256"),
                 "feature_sha256": record.get("feature_sha256"),
                 "split_sha256": record.get("split_sha256"),
+                "lifecycle_state": record.get("lifecycle_state"),
+                "permitted_use": capability.get("permitted_use"),
             }
 
         if not parsed.parse_ok:

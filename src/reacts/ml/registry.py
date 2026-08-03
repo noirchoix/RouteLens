@@ -93,11 +93,19 @@ CREATE TABLE IF NOT EXISTS release_snapshots (
 
 
 class Registry:
-    def __init__(self, path: Path, *, read_only: bool = False):
+    def __init__(
+        self,
+        path: Path,
+        *,
+        read_only: bool = False,
+        project_root: Path | None = None,
+        model_dir: Path | None = None,
+    ):
         self.path = Path(path).resolve()
         self.read_only = bool(read_only)
-        self.project_root = self.path.parents[2] if len(self.path.parents) >= 3 else self.path.parent
-        self.model_dir = self.project_root / "data" / "models"
+        inferred_root = self.path.parents[2] if len(self.path.parents) >= 3 else self.path.parent
+        self.project_root = Path(project_root).resolve() if project_root else inferred_root
+        self.model_dir = Path(model_dir).resolve() if model_dir else self.project_root / "data" / "models"
         self.json_path = self.model_dir / "model_registry.json"
         if self.read_only:
             return
@@ -194,7 +202,7 @@ class Registry:
         if self.read_only:
             if not self.path.exists():
                 raise FileNotFoundError(f"Registry database does not exist: {self.path}")
-            conn = sqlite3.connect(f"{self.path.as_uri()}?mode=ro", uri=True)
+            conn = sqlite3.connect(f"{self.path.as_uri()}?mode=ro&immutable=1", uri=True)
             conn.execute("PRAGMA query_only=ON")
         else:
             conn = sqlite3.connect(self.path)
@@ -637,3 +645,33 @@ class Registry:
         result = dict(row)
         result["detail"] = json.loads(result.pop("detail_json"))
         return result
+
+
+class UnavailableRegistry:
+    """Read-only sentinel used when artifact-backed startup fails before a registry is available."""
+
+    read_only = True
+
+    def __init__(self, detail: str):
+        self.detail = detail
+
+    def list_models(self, **_: Any) -> list[dict[str, Any]]:
+        return []
+
+    def list_task_audits(self, **_: Any) -> list[dict[str, Any]]:
+        return []
+
+    def model_for_task(self, *_: Any, **__: Any) -> None:
+        return None
+
+    def resolve_artifact_path(self, artifact_path: str | Path) -> Path:
+        raise FileNotFoundError(f"Artifact registry is unavailable: {self.detail}: {artifact_path}")
+
+    def dataset(self, *_: Any, **__: Any) -> None:
+        return None
+
+    def get_job(self, *_: Any, **__: Any) -> None:
+        return None
+
+    def __getattr__(self, name: str):
+        raise PermissionError(f"Registry operation {name} is unavailable: {self.detail}")

@@ -157,10 +157,33 @@ def build_parser() -> argparse.ArgumentParser:
     export_hf.add_argument("--include-models", action="store_true")
     export_hf.add_argument("--contextual", action="store_true")
 
+    package_artifacts = sub.add_parser(
+        "package-product-two-artifacts",
+        help="Package the locked runtime models and indexes into an immutable inference bundle",
+    )
+    package_artifacts.add_argument("--release", required=True)
+    package_artifacts.add_argument("--destination", default="dist/artifacts")
+    package_artifacts.add_argument("--compatible-service-version", default=">=2.1.0,<2.2.0")
+    package_artifacts.add_argument("--no-archive", action="store_true")
+    package_artifacts.add_argument("--overwrite", action="store_true")
+
+    validate_bundle = sub.add_parser(
+        "validate-artifact-bundle",
+        help="Validate an immutable Product Two inference artifact bundle",
+    )
+    validate_bundle.add_argument("--bundle", required=True)
+    validate_bundle.add_argument("--service-version", default="2.1.0")
+
     serve = sub.add_parser("serve", help="Start the API and embedded UI")
     serve.add_argument("--host", default="0.0.0.0")
     serve.add_argument("--port", default=8000, type=int)
     serve.add_argument("--reload", action="store_true")
+    serve.add_argument("--artifact-uri")
+    serve.add_argument("--artifact-release")
+    serve.add_argument("--artifact-cache-dir")
+    serve.add_argument("--offline", action="store_true")
+    serve.add_argument("--no-warmup", action="store_true")
+    serve.add_argument("--require-artifacts", action="store_true")
 
     return parser
 
@@ -177,6 +200,59 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "audit-source":
         source = ArtifactSource(cfg.source_artifact)
         print(json.dumps(source.inventory().__dict__, indent=2, default=str))
+        return 0
+
+    if args.command == "validate-artifact-bundle":
+        from reacts.artifacts.bundle import ArtifactBundleValidator
+
+        result = ArtifactBundleValidator(Path(args.bundle)).validate(service_version=args.service_version)
+        print(json.dumps(result, indent=2, default=str))
+        return 0 if result.get("pass") else 1
+
+    if args.command == "package-product-two-artifacts":
+        from reacts.artifacts.bundle import ArtifactBundlePublisher
+
+        result = ArtifactBundlePublisher(cfg).package(
+            release=args.release,
+            destination=Path(args.destination),
+            compatible_service_version=args.compatible_service_version,
+            archive=not args.no_archive,
+            overwrite=args.overwrite,
+        )
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+
+    if args.command == "serve":
+        import os
+
+        if args.artifact_uri is not None:
+            cfg.artifact_uri = args.artifact_uri
+        if args.artifact_release is not None:
+            cfg.artifact_release = args.artifact_release
+        if args.artifact_cache_dir is not None:
+            cfg.artifact_cache_dir = Path(args.artifact_cache_dir).resolve()
+        cfg.offline_mode = bool(args.offline)
+        cfg.artifact_verify_sha256 = True
+        cfg.artifact_warmup = not args.no_warmup
+        cfg.artifact_required = bool(args.require_artifacts or cfg.artifact_release)
+
+        os.environ["REACTS_PROJECT_ROOT"] = str(cfg.project_root)
+        if cfg.artifact_uri:
+            os.environ["REACTS_ARTIFACT_URI"] = cfg.artifact_uri
+        else:
+            os.environ.pop("REACTS_ARTIFACT_URI", None)
+        if cfg.artifact_release:
+            os.environ["REACTS_ARTIFACT_RELEASE"] = cfg.artifact_release
+        else:
+            os.environ.pop("REACTS_ARTIFACT_RELEASE", None)
+        os.environ["REACTS_ARTIFACT_CACHE_DIR"] = str(cfg.artifact_cache_dir)
+        os.environ["REACTS_ARTIFACT_REQUIRED"] = str(cfg.artifact_required).lower()
+        os.environ["REACTS_ARTIFACT_VERIFY_SHA256"] = "true"
+        os.environ["REACTS_ARTIFACT_WARMUP"] = str(cfg.artifact_warmup).lower()
+        os.environ["REACTS_OFFLINE_MODE"] = str(cfg.offline_mode).lower()
+        if cfg.artifact_required:
+            os.environ["REACTS_API_READ_ONLY_REGISTRY"] = "true"
+        uvicorn.run("reacts.api.main:app", host=args.host, port=args.port, reload=args.reload)
         return 0
 
     app = Application(
@@ -368,9 +444,6 @@ def main(argv: list[str] | None = None) -> int:
             include_models_from=cfg.model_dir if args.include_models else None,
         )
         print(json.dumps(result, indent=2, default=str))
-        return 0
-    if args.command == "serve":
-        uvicorn.run("reacts.api.main:app", host=args.host, port=args.port, reload=args.reload)
         return 0
     parser.error(f"Unhandled command {args.command}")
     return 2

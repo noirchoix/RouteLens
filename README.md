@@ -56,9 +56,40 @@ rxnmapper==0.4.3
 setuptools==81.0.0
 ```
 
+## Product Two v2.1.0 artifact-backed inference
+
+The v2.1.0 service can start from a clean code checkout with no local model, index, or registry artifacts. It resolves one exact immutable artifact release, verifies the complete checksum and scientific contract, installs it atomically into a cache, opens the registry read-only, warms required models and indexes, and exposes readiness only after the runtime is usable.
+
+Package the locked v2.0.12 runtime artifacts:
+
+```bash
+reacts --project-root . package-product-two-artifacts \
+  --release product-two-artifacts-v2.0.12 \
+  --destination dist/artifacts
+
+reacts --project-root . validate-artifact-bundle \
+  --bundle dist/artifacts/product-two-artifacts-v2.0.12
+```
+
+Start the v2.1.0 service against that exact release:
+
+```bash
+reacts --project-root . serve \
+  --artifact-uri dist/artifacts \
+  --artifact-release product-two-artifacts-v2.0.12 \
+  --require-artifacts \
+  --port 8000
+```
+
+`GET /health` reports process health. `GET /ready` returns success only after artifact verification and model/index warm-up. Artifact-dependent inference and retrieval endpoints return HTTP 503 while readiness is false.
+
+The service distinguishes runtime readiness from scientific model promotion. Candidate and staging models retain explicit permitted-use declarations, warnings, lifecycle state, artifact release, and training-split provenance in every response. Superseded and incompatible artifacts are never loaded.
+
+See `docs/ARTIFACT_BACKED_INFERENCE_RUNTIME.md`, `docs/STAGING_AND_ROLLBACK.md`, and `docs/PERFORMANCE_ENVELOPE.md`.
+
 ## Product Two staged run
 
-Product Two v2.0.9 adds deterministic patent/reaction connected-component splits, strict exact-chemistry leakage gates, universal pre-fit class-support validation, a lifecycle-aware model registry, and an exact scikit-learn 1.9.0 model/runtime contract. Mapping and derivation remain frozen when upgrading from v2.0.8.
+The locked Product Two v2.0.12 lineage adds deterministic patent/reaction connected-component splits, strict exact-chemistry leakage gates, universal pre-fit class-support validation, a lifecycle-aware model registry, an exact scikit-learn 1.9.0 model/runtime contract, and observational read-only acceptance validation. Mapping and derivation remain frozen when upgrading from v2.0.8.
 
 ```bash
 reacts --project-root . build-contextual-v2 --resume
@@ -88,7 +119,7 @@ reacts --project-root . validate-product-two
 Only after strict validation succeeds:
 
 ```bash
-reacts --project-root . lock-product-two --release-id v2.0.9
+reacts --project-root . lock-product-two --release-id v2.0.12
 ```
 
 
@@ -235,11 +266,16 @@ Malformed reactions can still be submitted to parse-intelligence tasks. Conditio
 
 ```text
 GET  /health
+GET  /ready
 GET  /api/v2/health
+GET  /api/v2/artifacts
+GET  /api/v2/models
 GET  /api/v2/datasets
 GET  /api/v2/routes/{route_id}
 POST /api/v2/inference/contextual
 POST /api/v2/inference/batch
+POST /api/v2/retrieval/reactions
+POST /api/v2/retrieval/routes
 POST /api/v2/inference/repair
 POST /api/v2/inference/anomaly
 POST /api/v2/inference/route-quality

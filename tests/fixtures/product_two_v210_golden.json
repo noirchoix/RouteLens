@@ -1,0 +1,18 @@
+{
+  "artifact_release": "product-two-artifacts-test",
+  "training_split_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "task": "reaction_family",
+  "model_stage": "candidate",
+  "lifecycle_state": "active",
+  "permitted_use_contains": "retrieval-backed",
+  "required_endpoints": [
+    "/health",
+    "/ready",
+    "/api/v2/artifacts",
+    "/api/v2/models",
+    "/api/v2/inference/contextual",
+    "/api/v2/inference/batch",
+    "/api/v2/retrieval/reactions",
+    "/api/v2/retrieval/routes"
+  ]
+}

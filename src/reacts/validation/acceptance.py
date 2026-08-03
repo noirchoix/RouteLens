@@ -412,7 +412,8 @@ class ScientificAcceptanceValidator:
             "tasks": [],
             "allow_experimental": True,
         }
-        single = client.post("/api/v2/inference/contextual", json=payload)
+        headers = {"X-REACTS-Allow-Experimental": "true"}
+        single = client.post("/api/v2/inference/contextual", json=payload, headers=headers)
         batch = client.post(
             "/api/v2/inference/batch",
             json={
@@ -422,6 +423,7 @@ class ScientificAcceptanceValidator:
                 "tasks": [],
                 "allow_experimental": True,
             },
+            headers=headers,
         )
         equivalent = False
         if single.status_code == 200 and batch.status_code == 200:

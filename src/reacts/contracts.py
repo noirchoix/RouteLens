@@ -94,6 +94,12 @@ class PredictionItem(BaseModel):
 class TaskPrediction(BaseModel):
     task: str
     predictions: list[PredictionItem]
+    model_id: str | None = None
+    lifecycle_state: str | None = None
+    permitted_use: str | None = None
+    artifact_release: str | None = None
+    training_split_sha256: str | None = None
+    warnings: list[str] = Field(default_factory=list)
     abstained: bool = False
     reason: str | None = None
     model_version: str | None = None
@@ -136,6 +142,19 @@ class InferenceResponse(BaseModel):
     reaction_family: str | None = None
     provenance: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
+
+
+class ReactionRetrievalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reaction_smiles: str = Field(min_length=3, max_length=100_000)
+    k: int = Field(default=10, ge=1, le=50)
+    minimum_quality: float | None = Field(default=0.35, ge=0.0, le=1.0)
+
+
+class RouteRetrievalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reaction_smiles: str = Field(min_length=3, max_length=100_000)
+    k: int = Field(default=10, ge=1, le=50)
 
 
 class TrainingRequest(BaseModel):

@@ -29,3 +29,6 @@ class JobManager:
 
         self.executor.submit(runner)
         return job_id
+
+    def shutdown(self) -> None:
+        self.executor.shutdown(wait=False, cancel_futures=True)

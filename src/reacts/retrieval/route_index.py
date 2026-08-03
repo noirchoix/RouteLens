@@ -143,13 +143,32 @@ class RouteEmbeddingIndexBuilder:
 
 class RouteEmbeddingIndex:
     def __init__(self, index_dir: Path):
-        root = Path(index_dir) / "routes"
+        candidate = Path(index_dir)
+        root = candidate if (candidate / "route_index_manifest.json").exists() else candidate / "routes"
+        self.root = root
+        self.manifest = json.loads((root / "route_index_manifest.json").read_text(encoding="utf-8"))
         self.vectors = np.load(root / "route_embeddings.npz")["vectors"]
         self.metadata = [
             json.loads(line)
             for line in (root / "route_metadata.jsonl").read_text(encoding="utf-8").splitlines()
             if line
         ]
+
+
+    def get_route(self, route_id: str) -> dict[str, Any] | None:
+        for record in self.metadata:
+            if route_id in {
+                str(record.get("route_id") or ""),
+                str(record.get("route_instance_id") or ""),
+                str(record.get("source_route_id") or ""),
+            }:
+                return {**record, "artifact_backed_summary": True}
+        return None
+
+    def search_reaction(self, reaction_smiles: str, k: int = 10) -> list[dict[str, Any]]:
+        rfp, pfp = reaction_fingerprint(reaction_smiles, self.manifest.get("dimensions", 4096) // 2)
+        vector = np.concatenate([rfp, pfp]).astype(np.float32)
+        return self.search_vector(vector, k=k)
 
     def search_vector(self, vector: np.ndarray, k: int = 10) -> list[dict[str, Any]]:
         norm = np.linalg.norm(vector)

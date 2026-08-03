@@ -1,16 +1,30 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from reacts import __version__
 from reacts.api.dependencies import require_api_key
-from reacts.api.observability import metrics_response, telemetry_middleware
+from reacts.api.observability import (
+    INFERENCE_FAILURES,
+    INFERENCE_LATENCY,
+    INFERENCE_REQUESTS,
+    RETRIEVAL_LATENCY,
+    RequestBodyLimitMiddleware,
+    metrics_response,
+    record_runtime_metrics,
+    telemetry_middleware,
+)
 from reacts.contracts import (
     BatchPredictionRequest,
     ConditionPredictionRequest,
@@ -21,13 +35,15 @@ from reacts.contracts import (
     MappingRunRequest,
     DerivationRunRequest,
     ReactionInput,
+    ReactionRetrievalRequest,
+    RouteRetrievalRequest,
     ReleaseLockRequest,
     RepairRequest,
     RouteQualityRequest,
     TrainingRequest,
 )
 from reacts.services.application import Application
-from reacts.settings import Settings, settings as default_settings
+from reacts.settings import Settings
 
 
 def create_app(
@@ -35,18 +51,69 @@ def create_app(
     *,
     read_only_registry: bool = False,
 ) -> FastAPI:
-    cfg = (settings or default_settings).resolve()
+    cfg = (settings or Settings()).resolve()
     application = Application(cfg, read_only_registry=read_only_registry)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        try:
+            yield
+        finally:
+            application.close()
+
     app = FastAPI(
         title="REACTS Product Two",
         version=__version__,
         description="Contextual reaction intelligence with scientific release governance and evidence-grounded inference.",
+        lifespan=lifespan,
     )
     app.state.application = application
+    app.state.request_semaphore = asyncio.Semaphore(max(1, cfg.max_concurrent_requests))
     app.middleware("http")(telemetry_middleware)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=cfg.trusted_host_list)
+    app.add_middleware(RequestBodyLimitMiddleware, max_bytes=cfg.max_request_bytes)
+    if cfg.cors_origin_list:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cfg.cors_origin_list,
+            allow_credentials=False,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Content-Type", "X-API-Key", "X-Request-ID", "X-REACTS-Allow-Experimental"],
+        )
+    record_runtime_metrics(application)
 
     static_dir = Path(__file__).resolve().parents[1] / "ui" / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+    def require_ready() -> None:
+        try:
+            application.ensure_ready()
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": application.artifact_runtime.reason_code or "service_not_ready",
+                    "message": str(exc),
+                    "artifact_release": application.artifact_runtime.artifact_release,
+                },
+            ) from exc
+
+    def require_mutable_runtime() -> None:
+        try:
+            application.ensure_mutable()
+        except PermissionError as exc:
+            raise HTTPException(status_code=409, detail={"code": "runtime_read_only", "message": str(exc)}) from exc
+
+    def _truthy(value: str | None) -> bool:
+        return bool(value and value.strip().lower() in {"1", "true", "yes", "on"})
+
+    def experimental_access(requested: bool, header: str | None) -> bool:
+        if not requested:
+            return False
+        allowed = cfg.allow_experimental_models or _truthy(header)
+        if not allowed:
+            raise HTTPException(403, detail={"code": "experimental_access_denied"})
+        return True
 
     @app.get("/", include_in_schema=False)
     def home() -> FileResponse:
@@ -74,6 +141,23 @@ def create_app(
                 "baseline_frozen": (cfg.baseline_dir / "baseline_manifest.json").exists(),
             },
             "models": len(application.registry.list_models()),
+            "runtime": application.readiness(),
+        }
+
+    @app.get("/ready")
+    def ready() -> JSONResponse:
+        payload = application.readiness()
+        return JSONResponse(status_code=200 if payload.get("ready") else 503, content=payload)
+
+    @app.get("/api/v2/artifacts", dependencies=[Depends(require_api_key)])
+    def artifacts_v2() -> dict[str, Any]:
+        return application.artifact_info()
+
+    @app.get("/api/v2/models", dependencies=[Depends(require_api_key)])
+    def models_v2() -> dict[str, Any]:
+        return {
+            "artifact_release": application.artifact_runtime.artifact_release,
+            "models": application.model_capabilities(),
         }
 
     @app.get("/api/v1/datasets", dependencies=[Depends(require_api_key)])
@@ -121,6 +205,7 @@ def create_app(
 
     @app.post("/api/v1/jobs/train", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def train_v1(payload: TrainingRequest) -> JobResponse:
+        require_mutable_runtime()
         trainer = application.trainer(payload.dataset_version, payload.max_rows)
         job_id = application.jobs.submit(
             "train",
@@ -140,7 +225,8 @@ def create_app(
             "mapping_ready": (cfg.mapping_v2_dir / "mapping_manifest.json").exists(),
             "derivation_ready": (cfg.derivation_v2_dir / "derivation_manifest.json").exists(),
             "canonical_ready": (cfg.canonical_v2_dir / "dataset_manifest.json").exists(),
-            "index_ready": (cfg.index_v2_dir / "index_manifest.json").exists(),
+            "index_ready": (application.settings.index_v2_dir / "index_manifest.json").exists(),
+            "runtime": application.readiness(),
         }
 
     @app.get("/api/v2/datasets", dependencies=[Depends(require_api_key)])
@@ -151,14 +237,29 @@ def create_app(
         }
 
     @app.post("/api/v2/inference/contextual", response_model=InferenceResponse, dependencies=[Depends(require_api_key)])
-    def contextual_inference(payload: ConditionPredictionRequest) -> InferenceResponse:
-        return application.contextual_inference.predict(
-            payload.reaction_smiles,
-            payload.tasks,
-            include_evidence=payload.include_evidence,
-            evidence_k=payload.evidence_k,
-            allow_experimental=payload.allow_experimental,
-        )
+    def contextual_inference(
+        payload: ConditionPredictionRequest,
+        x_reacts_allow_experimental: str | None = Header(default=None),
+    ) -> InferenceResponse:
+        require_ready()
+        endpoint = "contextual"
+        INFERENCE_REQUESTS.labels(endpoint).inc()
+        started = time.perf_counter()
+        try:
+            return application.contextual_inference.predict(
+                payload.reaction_smiles,
+                payload.tasks,
+                include_evidence=payload.include_evidence,
+                evidence_k=payload.evidence_k,
+                allow_experimental=experimental_access(
+                    payload.allow_experimental, x_reacts_allow_experimental
+                ),
+            )
+        except Exception:
+            INFERENCE_FAILURES.labels(endpoint, "inference_failed").inc()
+            raise
+        finally:
+            INFERENCE_LATENCY.labels(endpoint).observe(time.perf_counter() - started)
 
     @app.post("/api/v2/inference/repair", dependencies=[Depends(require_api_key)])
     def repair_v2(payload: RepairRequest) -> dict[str, Any]:
@@ -184,35 +285,77 @@ def create_app(
         return application.score_route_quality(payload.model_dump())
 
     @app.post("/api/v2/inference/batch", dependencies=[Depends(require_api_key)])
-    def contextual_batch(payload: BatchPredictionRequest) -> dict[str, Any]:
-        if len(payload.reactions) > cfg.max_batch_rows:
-            raise HTTPException(413, f"Batch exceeds max_batch_rows={cfg.max_batch_rows}")
-        results = [
-            application.contextual_inference.predict(
-                reaction,
-                payload.tasks,
-                include_evidence=payload.include_evidence,
-                evidence_k=payload.evidence_k,
-                allow_experimental=payload.allow_experimental,
-            ).model_dump()
-            for reaction in payload.reactions
-        ]
-        return {"rows": len(results), "results": results}
+    def contextual_batch(
+        payload: BatchPredictionRequest,
+        x_reacts_allow_experimental: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        require_ready()
+        if len(payload.reactions) > cfg.inference_max_batch_rows:
+            raise HTTPException(413, f"Batch exceeds inference_max_batch_rows={cfg.inference_max_batch_rows}")
+        allow_experimental = experimental_access(payload.allow_experimental, x_reacts_allow_experimental)
+        endpoint = "batch"
+        INFERENCE_REQUESTS.labels(endpoint).inc()
+        started = time.perf_counter()
+        try:
+            results = [
+                application.contextual_inference.predict(
+                    reaction,
+                    payload.tasks,
+                    include_evidence=payload.include_evidence,
+                    evidence_k=payload.evidence_k,
+                    allow_experimental=allow_experimental,
+                ).model_dump()
+                for reaction in payload.reactions
+            ]
+            return {
+                "rows": len(results),
+                "artifact_release": application.artifact_runtime.artifact_release,
+                "results": results,
+            }
+        except Exception:
+            INFERENCE_FAILURES.labels(endpoint, "inference_failed").inc()
+            raise
+        finally:
+            INFERENCE_LATENCY.labels(endpoint).observe(time.perf_counter() - started)
+
+    @app.post("/api/v2/retrieval/reactions", dependencies=[Depends(require_api_key)])
+    def retrieve_reactions_v2(payload: ReactionRetrievalRequest) -> dict[str, Any]:
+        require_ready()
+        started = time.perf_counter()
+        try:
+            return application.retrieve_reactions(
+                payload.reaction_smiles,
+                k=payload.k,
+                minimum_quality=payload.minimum_quality,
+            )
+        finally:
+            RETRIEVAL_LATENCY.labels("reactions").observe(time.perf_counter() - started)
+
+    @app.post("/api/v2/retrieval/routes", dependencies=[Depends(require_api_key)])
+    def retrieve_routes_v2(payload: RouteRetrievalRequest) -> dict[str, Any]:
+        require_ready()
+        started = time.perf_counter()
+        try:
+            return application.retrieve_routes(payload.reaction_smiles, k=payload.k)
+        finally:
+            RETRIEVAL_LATENCY.labels("routes").observe(time.perf_counter() - started)
 
     @app.get("/api/v2/routes/{route_id}", dependencies=[Depends(require_api_key)])
     def route_v2(route_id: str) -> dict[str, Any]:
-        result = application.contextual_routes.get_route(route_id)
+        result = application.get_contextual_route(route_id)
         if result is None:
             raise HTTPException(404, "Contextual route not found")
         return result
 
     @app.post("/api/v2/jobs/freeze-baseline", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def freeze_baseline() -> JobResponse:
+        require_mutable_runtime()
         job_id = application.jobs.submit("freeze_baseline", {}, application.freeze_product_one)
         return JobResponse(job_id=job_id, status="queued", detail={"release_id": "v1.0.0-baseline"})
 
     @app.post("/api/v2/jobs/build-contextual", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def build_contextual(payload: ProductTwoBuildRequest) -> JobResponse:
+        require_mutable_runtime()
         detail = payload.model_dump()
         job_id = application.jobs.submit(
             "build_contextual",
@@ -228,6 +371,7 @@ def create_app(
 
     @app.post("/api/v2/jobs/map-reactions", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def map_reactions_v2(payload: MappingRunRequest) -> JobResponse:
+        require_mutable_runtime()
         detail = payload.model_dump()
         job_id = application.jobs.submit(
             "map_reactions",
@@ -251,6 +395,7 @@ def create_app(
 
     @app.post("/api/v2/jobs/derive-reaction-centres", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def derive_reaction_centres_v2(payload: DerivationRunRequest) -> JobResponse:
+        require_mutable_runtime()
         detail = payload.model_dump()
         job_id = application.jobs.submit(
             "derive_reaction_centres",
@@ -267,6 +412,7 @@ def create_app(
 
     @app.post("/api/v2/jobs/build-index", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def build_contextual_index(max_rows: int | None = None) -> JobResponse:
+        require_mutable_runtime()
         job_id = application.jobs.submit(
             "build_contextual_index",
             {"max_rows": max_rows},
@@ -276,6 +422,7 @@ def create_app(
 
     @app.post("/api/v2/jobs/train", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def train_v2(payload: TrainingRequest) -> JobResponse:
+        require_mutable_runtime()
         classification = [task for task in payload.tasks if task in {"parse_failure_class", "repairability", "reaction_family"}]
         specialist = [task for task in payload.tasks if task not in classification]
 
@@ -298,11 +445,13 @@ def create_app(
 
     @app.post("/api/v2/jobs/validate", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def validate_v2() -> JobResponse:
+        require_mutable_runtime()
         job_id = application.jobs.submit("validate_product_two", {}, application.validate_product_two)
         return JobResponse(job_id=job_id, status="queued", detail={})
 
     @app.post("/api/v2/jobs/lock-release", response_model=JobResponse, dependencies=[Depends(require_api_key)])
     def lock_release_v2(payload: ReleaseLockRequest) -> JobResponse:
+        require_mutable_runtime()
         detail = payload.model_dump()
         job_id = application.jobs.submit(
             "lock_product_two_release",

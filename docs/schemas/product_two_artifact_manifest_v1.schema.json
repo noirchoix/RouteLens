@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reacts.example/schemas/product_two_artifact_manifest_v1.schema.json",
+  "title": "REACTS Product Two Artifact Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "artifact_release",
+    "created_at_utc",
+    "compatible_service_version",
+    "source_service_version",
+    "dataset_version",
+    "training_split_sha256",
+    "canonical_manifest_sha256",
+    "split_manifest_sha256",
+    "model_registry_sha256",
+    "registry_database_sha256",
+    "reaction_index_sha256",
+    "route_index_sha256",
+    "required_scikit_learn",
+    "required_runtime",
+    "required_tasks",
+    "runtime_model_count",
+    "paths",
+    "contract",
+    "index_contract"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.1.0-artifact-bundle-v1"
+    },
+    "artifact_release": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "created_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "compatible_service_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_service_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "training_split_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "canonical_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "split_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "model_registry_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "registry_database_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "reaction_index_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "route_index_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "required_scikit_learn": {
+      "const": "1.9.0"
+    },
+    "required_tasks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "runtime_model_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_registry",
+        "registry_database",
+        "reaction_index",
+        "route_index",
+        "dataset_manifest",
+        "split_manifest",
+        "runtime_environment"
+      ],
+      "properties": {
+        "model_registry": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "registry_database": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "reaction_index": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "route_index": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "dataset_manifest": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "split_manifest": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "runtime_environment": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "immutable",
+        "read_only_runtime",
+        "mapping_queues_included",
+        "derivation_queues_included",
+        "training_caches_included",
+        "superseded_models_included",
+        "canonical_source_rows_included"
+      ],
+      "properties": {
+        "immutable": {
+          "const": true
+        },
+        "read_only_runtime": {
+          "const": true
+        },
+        "mapping_queues_included": {
+          "const": false
+        },
+        "derivation_queues_included": {
+          "const": false
+        },
+        "training_caches_included": {
+          "const": false
+        },
+        "superseded_models_included": {
+          "const": false
+        },
+        "canonical_source_rows_included": {
+          "const": false
+        }
+      }
+    },
+    "source_hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "index_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reaction_training_split_sha256",
+        "route_training_split_sha256"
+      ],
+      "properties": {
+        "reaction_training_split_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "route_training_split_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "required_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "python_major_minor",
+        "python_implementation",
+        "scikit_learn",
+        "numpy",
+        "scipy",
+        "joblib",
+        "rdkit"
+      ],
+      "properties": {
+        "python_major_minor": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        },
+        "python_implementation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scikit_learn": {
+          "const": "1.9.0"
+        },
+        "numpy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scipy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "joblib": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rdkit": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
+  }
+}

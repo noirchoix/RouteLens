@@ -132,3 +132,7 @@ pyproject.toml.pre-v2.0.2-conflict
 *.bak
 *.tmp
 *.zip
+# Immutable artifact resolver cache
+data/artifact_cache/*
+!data/artifact_cache/.gitkeep
+

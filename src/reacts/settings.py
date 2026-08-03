@@ -25,9 +25,25 @@ class Settings(BaseSettings):
     registry_db: Path = Path("data/registry/reacts.sqlite3")
     reports_dir: Path = Path("reports")
     releases_dir: Path = Path("data/releases")
+    artifact_uri: str | None = None
+    artifact_release: str | None = None
+    artifact_cache_dir: Path = Path("data/artifact_cache")
+    artifact_verify_sha256: bool = True
+    artifact_required: bool = False
+    artifact_warmup: bool = True
+    artifact_lock_timeout_seconds: int = 120
+    offline_mode: bool = False
     api_key: str | None = None
     require_api_key: bool = False
     max_batch_rows: int = 100_000
+    inference_max_batch_rows: int = 256
+    max_request_bytes: int = 1_048_576
+    request_timeout_seconds: float = 30.0
+    max_concurrent_requests: int = 8
+    rate_limit_requests_per_minute: int = 120
+    cors_origins: str = ""
+    trusted_hosts: str = "localhost,127.0.0.1,testserver"
+    allow_experimental_models: bool = False
     temperature_min_c: float = -150.0
     temperature_max_c: float = 350.0
     time_min_h: float = 1.0 / 3600.0
@@ -62,11 +78,21 @@ class Settings(BaseSettings):
             "registry_db",
             "reports_dir",
             "releases_dir",
+            "artifact_cache_dir",
         ]:
             value = getattr(self, field)
             if not value.is_absolute():
                 setattr(self, field, root / value)
         return self
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
+
+    @property
+    def trusted_host_list(self) -> list[str]:
+        values = [item.strip() for item in self.trusted_hosts.split(",") if item.strip()]
+        return values or ["*"]
 
 
 settings = Settings().resolve()
