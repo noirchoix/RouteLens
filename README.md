@@ -1,10 +1,22 @@
-# REACTS Product Two
+# RouteLens — Contextual Reaction Intelligence
 
-**Contextual Reaction Intelligence**
+A governed scientific reaction-intelligence platform that treats model training, reaction mapping, retrieval, and release promotion as one reproducible system. RouteLens combines chemistry-aware data processing with specialist scikit-learn models, persistent lifecycle registries, leakage controls, calibration, abstention, resumable jobs, and auditable release artifacts.
 
-REACTS Product Two upgrades the stored Product One run into a scientifically governed reaction-intelligence platform. It preserves the complete Product One corpus and model artifacts as an immutable `v1.0.0-baseline`, builds a separate contextual canonical dataset, resolves only evidence-supported symbolic intermediates, derives route and structural chemistry records, trains redesigned specialist models, and serves retrieval-augmented inference with applicability and abstention controls.
+## Engineering profile
 
-Product Two is a code upgrade. It does not require copying the large Product One data, model, or index artifacts into the patch archive. Apply the patch over the existing Product One project and retain its `data/` directory.
+This repository demonstrates:
+
+- FastAPI serving plane plus offline data/model operations
+- Persistent SQLite registries for datasets, training runs, models, jobs, audits, and release snapshots
+- Reaction atom-mapping and canonical dataset construction with recoverable queues
+- Specialist `SGDClassifier` / `SGDRegressor` models with class-support checks and anomaly handling
+- Patent/reaction-group leakage control, calibration, applicability checks, and abstention
+- Artifact/data/feature/split hashes, model cards, release snapshots, and supersession history
+- Prometheus-style metrics, API-key protection, Docker, CI, and scientific validation tests
+
+## Reliability and scope
+
+The current model implementation is grounded in scikit-learn SGD-based models. Optional dependencies such as LightGBM, XGBoost, or MLflow are not part of the active runtime unless a future implementation explicitly wires them in.
 
 ## Scientific contract
 
