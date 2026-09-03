@@ -1,0 +1,25 @@
+{
+  "name": "routelens-visual-workbench",
+  "private": true,
+  "version": "2.1.6",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "build": "vite build",
+    "build:embed": "node scripts/build-embedded.mjs",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.70.1",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.3.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.5"
+  }
+}

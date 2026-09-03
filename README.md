@@ -325,6 +325,34 @@ data/releases/v2.0.5/release_manifest.json
 
 The release manifest links the Product One baseline, canonical v2, contextual retrieval index, acceptance report, and every qualified model by portable path and SHA-256 hash.
 
+## Visual inference workbench
+
+Product Two v2.1.6 includes a Svelte 5/SvelteKit visual workbench under `ui/`. It presents Product Two capabilities in task language: analyze one or several reactions, find similar patent records and routes, check a malformed reaction, compare observed conditions with corpus patterns, score route-record quality, open route details, and inspect runtime status. Model stages, permitted use, hashes, and raw JSON remain available as secondary technical details rather than dominating the primary result.
+
+The frontend reads `GET /api/v2/capabilities` before enabling workflows with optional prerequisites. In artifact release `product-two-artifacts-v2.0.12-r1`, condition comparison reports **setup required** because the condition-anomaly statistics artifact is not included; the rest of the validated read-only inference/retrieval surface remains available. See `docs/VISUAL_INFERENCE_WORKBENCH.md` for the `r2` publication procedure when those statistics are built.
+
+Development is intentionally split into two processes. The Python CLI remains authoritative and starts only the backend/API runtime used by the workbench:
+
+```bash
+# terminal 1 — project root
+reacts --project-root . serve \
+  --artifact-uri dist/artifacts \
+  --artifact-release product-two-artifacts-v2.0.12-r1 \
+  --artifact-cache-dir dist/artifacts \
+  --require-artifacts \
+  --port 8000
+```
+
+Start the frontend independently from `ui/`:
+
+```bash
+# terminal 2 — project root
+cd ui
+npm run dev
+```
+
+Open `http://127.0.0.1:5173/`. The Vite development server proxies `/api`, `/health`, and `/ready` to the backend at `http://127.0.0.1:8000`, so local development does not require a CORS change. The committed assets under `src/reacts/ui/static/` remain an optional packaged fallback; `npm run build:embed` is a packaging command, not the development start path. See `docs/VISUAL_INFERENCE_WORKBENCH.md`.
+
 ## Tests
 
 ```bash

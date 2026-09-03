@@ -134,3 +134,7 @@ pyproject.toml.pre-v2.0.2-conflict
 *.zip
 # Immutable artifact resolver cache
 data/artifact_cache/
+# SvelteKit visual workbench build state
+ui/node_modules/
+ui/.svelte-kit/
+ui/build/

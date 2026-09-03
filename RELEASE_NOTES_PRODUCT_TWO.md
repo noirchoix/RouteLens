@@ -1,3 +1,21 @@
+# Product Two v2.1.6 — Visual inference workbench
+
+Product Two v2.1.6 adds an additive Svelte 5/SvelteKit visual workbench while preserving the complete CLI and immutable artifact-backed runtime.
+
+- Exposes all read-only v2 inference, retrieval, repair, condition-comparison and route-quality capabilities without reproducing mutable CLI operations.
+- Adds `GET /api/v2/capabilities` so the frontend can distinguish workflows that are available now, require setup, are CLI-only, or are unavailable before the user submits a request.
+- Presents function, answer and supporting corpus context first; model lifecycle, permitted use, warnings, hashes and raw JSON move to progressive-disclosure details.
+- Gives batch and retrieval results dedicated compact views with large detail dialogs instead of rendering response JSON in the narrow result column.
+- Adds complete repair examples and plain-language input guidance for fields that previously assumed knowledge of internal route-context terminology.
+- Packages condition-anomaly statistics as an optional checksummed auxiliary artifact when they exist; artifact releases without those statistics remain valid and report condition comparison as setup-required.
+- Derives model task controls from the runtime model registry while translating task names and lifecycle states into user-facing labels.
+- Supports exact runtime, artifact, dataset and memory-mapped route-index inspection.
+- Stores optional API keys in browser session storage only.
+- Keeps experimental access explicit and server-governed.
+- Uses a restrained reaction-route line motif, responsive controls, visible focus, semantic status and reduced-motion support.
+- Keeps mutable mapping, derivation, training, validation and release-lock workflows CLI-only.
+- Retains compatibility with artifact release `product-two-artifacts-v2.0.12-r1`; no artifact repackaging or model rebuild is required.
+
 # Product Two v2.1.5 — Memory-Mapped Route Index Hotfix
 
 ## Corrected

@@ -199,6 +199,28 @@ def _package(tmp_path: Path, monkeypatch) -> tuple[Path, str]:
     return Path(result["bundle_path"]), release
 
 
+def test_publisher_includes_condition_anomaly_statistics_when_present(tmp_path: Path, monkeypatch) -> None:
+    declared = {**runtime_environment(), "scikit_learn": SCIKIT_LEARN_PIN}
+    monkeypatch.setattr("reacts.artifacts.bundle.runtime_environment", lambda: declared)
+    source = _source_runtime(tmp_path / "source-anomaly")
+    anomaly = source.model_dir / "condition_anomaly" / "robust_family_stats.json"
+    anomaly.parent.mkdir(parents=True, exist_ok=True)
+    anomaly.write_text('{"__global__": {}}\n', encoding="utf-8")
+
+    result = ArtifactBundlePublisher(source).package(
+        release="product-two-artifacts-v2.0.12-anomaly-test",
+        destination=tmp_path / "dist-anomaly",
+        archive=False,
+    )
+    bundle = Path(result["bundle_path"])
+    manifest = json.loads((bundle / "artifact_manifest.json").read_text(encoding="utf-8"))
+    descriptor = manifest["auxiliary_artifacts"]["condition_anomaly"]
+    packaged = bundle / descriptor["path"]
+    assert packaged.is_file()
+    assert sha256_file(packaged) == descriptor["sha256"]
+    assert ArtifactBundleValidator(bundle).validate(service_version="2.1.6")["pass"] is True
+
+
 def test_publisher_scopes_runtime_registry_to_canonical_dataset(tmp_path: Path, monkeypatch) -> None:
     declared = {**runtime_environment(), "scikit_learn": SCIKIT_LEARN_PIN}
     monkeypatch.setattr("reacts.artifacts.bundle.runtime_environment", lambda: declared)

@@ -50,6 +50,12 @@ The corrected distribution uses the release identifier `product-two-artifacts-v2
 
 The formal manifest schema is `docs/schemas/product_two_artifact_manifest_v1.schema.json`.
 
+### Optional condition statistics
+
+Condition anomaly scoring uses `data/models/condition_anomaly/robust_family_stats.json`. The eight core inference models do not depend on this file, so its absence does not invalidate an otherwise complete artifact bundle. When the source statistics exist, the publisher copies them to `models/condition_anomaly/robust_family_stats.json`, records their SHA-256 under `auxiliary_artifacts.condition_anomaly`, and the validator verifies that optional descriptor.
+
+`GET /api/v2/capabilities` reports condition comparison as `setup_required` when the statistics are absent. To enable it in artifact-backed serving, build the statistics in the source workspace and publish a new exact artifact release; do not mutate an already validated release in place.
+
 The publisher excludes:
 
 - mapping and derivation queues;

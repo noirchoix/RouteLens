@@ -13,3 +13,7 @@ data
 *.parquet
 *.sqlite3
 !dist/artifacts/**
+# SvelteKit visual workbench build state
+ui/node_modules/
+ui/.svelte-kit/
+ui/build/

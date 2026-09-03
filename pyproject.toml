@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reacts-contextual-intelligence"
-version = "2.1.5"
+version = "2.1.6"
 description = "Enterprise-grade contextual USPTO reaction curation, structural mapping, ML governance, retrieval and inference platform"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,7 +39,7 @@ reacts = "reacts.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-reacts = ["ui/static/*"]
+reacts = ["ui/static/*", "ui/static/**/*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

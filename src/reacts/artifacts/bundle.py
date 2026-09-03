@@ -381,6 +381,17 @@ class ArtifactBundlePublisher:
                 stage / "contracts" / "route_index_manifest.json",
             )
 
+            auxiliary_artifacts: dict[str, dict[str, Any]] = {}
+            anomaly_source = self.settings.model_dir / "condition_anomaly" / "robust_family_stats.json"
+            if anomaly_source.is_file():
+                anomaly_target = Path("models") / "condition_anomaly" / "robust_family_stats.json"
+                _copy_file(anomaly_source, stage / anomaly_target)
+                auxiliary_artifacts["condition_anomaly"] = {
+                    "path": anomaly_target.as_posix(),
+                    "sha256": sha256_file(stage / anomaly_target),
+                    "purpose": "Family-conditional corpus reference statistics for condition anomaly scoring.",
+                }
+
             environment = registry.get("runtime_environment") or runtime_environment()
             (stage / "environment" / "runtime_versions.json").write_text(
                 json.dumps(environment, indent=2, ensure_ascii=False, default=str) + "\n",
@@ -447,6 +458,7 @@ class ArtifactBundlePublisher:
                     "source_reaction_index_manifest_sha256": sha256_file(reaction_manifest_source),
                     "source_route_index_manifest_sha256": sha256_file(route_manifest_source),
                 },
+                "auxiliary_artifacts": auxiliary_artifacts,
                 "index_contract": {
                     "reaction_training_split_sha256": reaction_manifest.get("training_split_sha256"),
                     "route_training_split_sha256": packaged_route_manifest.get("training_split_sha256"),
@@ -654,6 +666,22 @@ class ArtifactBundleValidator:
             for field in ("task", "dataset_version", "artifact_path", "model_card_path", "split_sha256"):
                 if (json_model.get(field) or None) != (database_model.get(field) or None):
                     failures.append(f"Registry database/JSON mismatch for {model_id}: {field}")
+
+        for name, descriptor in dict(manifest.get("auxiliary_artifacts") or {}).items():
+            if not isinstance(descriptor, dict):
+                failures.append(f"Auxiliary artifact descriptor is invalid: {name}")
+                continue
+            relative = Path(str(descriptor.get("path") or ""))
+            if not relative.as_posix() or relative.is_absolute() or ".." in relative.parts:
+                failures.append(f"Auxiliary artifact path is invalid: {name}")
+                continue
+            artifact = self.root / relative
+            if not artifact.is_file():
+                failures.append(f"Auxiliary artifact is missing: {relative.as_posix()}")
+                continue
+            expected_hash = str(descriptor.get("sha256") or "")
+            if not expected_hash or sha256_file(artifact) != expected_hash:
+                failures.append(f"Auxiliary artifact hash mismatch: {name}")
 
         split = _read_json(resolved["split_manifest"]) if resolved.get("split_manifest", Path()).is_file() else {}
         reaction = _read_json(resolved["reaction_index"]) if resolved.get("reaction_index", Path()).is_file() else {}

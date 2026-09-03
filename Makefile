@@ -1,4 +1,4 @@
-.PHONY: install test test-log freeze context benchmark map derive indexes train validate lock product-two serve clean-v2
+.PHONY: install test test-log ui-install ui-check ui-build freeze context benchmark map derive indexes train validate lock product-two serve clean-v2
 
 install:
 	python -m pip install -e ".[dev,mapping]"
@@ -8,6 +8,15 @@ test:
 
 test-log:
 	python scripts/run_pytest_logged.py
+
+ui-install:
+	cd ui && npm install
+
+ui-check:
+	cd ui && npm run check
+
+ui-build:
+	cd ui && npm run build:embed
 
 freeze:
 	reacts --project-root . freeze-product-one

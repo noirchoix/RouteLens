@@ -126,6 +126,32 @@
         }
       }
     },
+    "auxiliary_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "condition_anomaly": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256",
+            "purpose"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "purpose": {
+              "const": "corpus-relative condition anomaly scoring"
+            }
+          }
+        }
+      }
+    },
     "paths": {
       "type": "object",
       "additionalProperties": false,

@@ -160,6 +160,10 @@ def create_app(
             "models": application.model_capabilities(),
         }
 
+    @app.get("/api/v2/capabilities", dependencies=[Depends(require_api_key)])
+    def capabilities_v2() -> dict[str, Any]:
+        return application.capability_status()
+
     @app.get("/api/v1/datasets", dependencies=[Depends(require_api_key)])
     def datasets() -> dict[str, Any]:
         return {"active": application.dataset_manifest("v1")}

@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     def resolve(self) -> "Settings":
         root = self.project_root.resolve()
+        self.project_root = root
         for field in [
             "source_artifact",
             "canonical_dir",

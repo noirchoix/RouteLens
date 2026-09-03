@@ -1,0 +1,81 @@
+{
+  "schema_version": "2.1.0-artifact-bundle-v1",
+  "artifact_release": "product-two-artifacts-v2.0.12-r1",
+  "created_at_utc": "2026-08-03T15:05:44.939378+00:00",
+  "compatible_service_version": ">=2.1.0,<2.2.0",
+  "source_service_version": "2.1.5",
+  "dataset_version": "uspto_multistep_contextual_v2",
+  "training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+  "canonical_manifest_sha256": "41379a01d9f8d611393e18d5770ae7901acbaadeb29939b6e34f4ee8c6e27b95",
+  "split_manifest_sha256": "5aef233ad9f46e7f84af900cc371c2f2e3f84f495f944c4b232e2b259ad4becd",
+  "model_registry_sha256": "60780018dff8e28e073617514bdf02f4cfd9971c65fb5eea072b5ce407bc8701",
+  "registry_database_sha256": "4d5dcd970263aaa3f7ac6ac62796cf9e8de9d2e562341a952d4373b7ec94b578",
+  "reaction_index_sha256": "c233b075561fae7668792b889e08801c301830f39558795d2272359d8520e613",
+  "route_index_sha256": "9d9f5f928db19d11c65019b743cd788fc7fc43c7c904e65a25dd36151a1a0a53",
+  "required_scikit_learn": "1.9.0",
+  "required_runtime": {
+    "python_major_minor": "3.13",
+    "python_implementation": "CPython",
+    "scikit_learn": "1.9.0",
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "joblib": "1.5.3",
+    "rdkit": "2026.3.4"
+  },
+  "required_tasks": [
+    "agent_family_multilabel",
+    "catalyst_family_multilabel",
+    "parse_failure_class",
+    "reaction_family",
+    "solvent_family_multilabel",
+    "solvent_multilabel",
+    "temperature_regression",
+    "time_regression"
+  ],
+  "runtime_model_count": 8,
+  "model_selection": {
+    "dataset_version": "uspto_multistep_contextual_v2",
+    "runtime_load_required": true,
+    "lifecycle_states": [
+      "active",
+      "candidate"
+    ],
+    "source_runtime_model_count": 13,
+    "selected_runtime_model_count": 8
+  },
+  "paths": {
+    "model_registry": "models/model_registry.json",
+    "registry_database": "registry/reacts.sqlite3",
+    "reaction_index": "indexes/index_manifest.json",
+    "route_index": "indexes/routes/route_index_manifest.json",
+    "dataset_manifest": "contracts/dataset_manifest.json",
+    "split_manifest": "contracts/split_manifest.json",
+    "runtime_environment": "environment/runtime_versions.json"
+  },
+  "contract": {
+    "immutable": true,
+    "read_only_runtime": true,
+    "mapping_queues_included": false,
+    "derivation_queues_included": false,
+    "training_caches_included": false,
+    "superseded_models_included": false,
+    "canonical_source_rows_included": false
+  },
+  "source_hashes": {
+    "source_registry_json_sha256": "9f91f4bdd741ec52117f32f33cd4737e54780c83d287a0dcd3713818ff577b90",
+    "source_registry_database_sha256": "9889dd42f54c62eead48730b44c6d020599d77c535d2a293b97d8da18fd7de81",
+    "source_final_manifest_sha256": "41379a01d9f8d611393e18d5770ae7901acbaadeb29939b6e34f4ee8c6e27b95",
+    "source_split_manifest_sha256": "5aef233ad9f46e7f84af900cc371c2f2e3f84f495f944c4b232e2b259ad4becd",
+    "source_reaction_index_manifest_sha256": "c233b075561fae7668792b889e08801c301830f39558795d2272359d8520e613",
+    "source_route_index_manifest_sha256": "b4ead8874b1e919032024349f48ed7c997692c370549567bc8d153b1c9a85748"
+  },
+  "index_contract": {
+    "reaction_training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+    "route_training_split_sha256": "078f1f283c215660fdc4d62cf40487b84903bb6031a108e7ce21c7941c4a561e",
+    "route_vectors_format": "npy_memmap_v1",
+    "route_vectors_file": "route_embeddings.npy",
+    "route_vectors_rows": 156076,
+    "route_vectors_dimensions": 4096,
+    "route_vectors_memory_mapped": true
+  }
+}

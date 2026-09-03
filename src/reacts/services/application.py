@@ -157,6 +157,114 @@ class Application:
     def model_capabilities(self) -> list[dict[str, Any]]:
         return [model_capability(record) for record in self.registry.list_models(runtime_only=True)]
 
+    def capability_status(self) -> dict[str, Any]:
+        readiness = self.readiness()
+        ready = bool(readiness.get("ready"))
+        models = self.model_capabilities() if ready else []
+        anomaly_artifact = self.settings.model_dir / "condition_anomaly" / "robust_family_stats.json"
+        reaction_index_ready = ready and (self.settings.index_v2_dir / "index_manifest.json").is_file()
+        route_index_ready = ready and (self.settings.index_v2_dir / "routes" / "route_index_manifest.json").is_file()
+        read_only = self.artifact_mode or bool(getattr(self.registry, "read_only", False))
+
+        def item(
+            identifier: str,
+            label: str,
+            *,
+            available: bool,
+            state: str | None = None,
+            reason: str | None = None,
+            setup_command: str | None = None,
+        ) -> dict[str, Any]:
+            return {
+                "id": identifier,
+                "label": label,
+                "available": available,
+                "state": state or ("available" if available else "unavailable"),
+                "reason": reason,
+                "setup_command": setup_command,
+            }
+
+        workflows = [
+            item(
+                "contextual",
+                "Analyze one reaction",
+                available=ready and bool(models),
+                reason=None if ready and models else "The artifact-backed inference runtime is not ready.",
+            ),
+            item(
+                "batch",
+                "Analyze several reactions",
+                available=ready and bool(models),
+                reason=None if ready and models else "The artifact-backed inference runtime is not ready.",
+            ),
+            item(
+                "retrieval_reactions",
+                "Find similar reactions",
+                available=reaction_index_ready,
+                reason=None if reaction_index_ready else "The reaction evidence index is unavailable.",
+            ),
+            item(
+                "retrieval_routes",
+                "Find similar routes",
+                available=route_index_ready,
+                reason=None if route_index_ready else "The route evidence index is unavailable.",
+            ),
+            item(
+                "route_lookup",
+                "Open a route by ID",
+                available=route_index_ready,
+                reason=None if route_index_ready else "The route evidence index is unavailable.",
+            ),
+            item("repair", "Check a broken reaction", available=True),
+            item(
+                "anomaly",
+                "Check temperature and time",
+                available=anomaly_artifact.is_file(),
+                state="available" if anomaly_artifact.is_file() else "setup_required",
+                reason=None
+                if anomaly_artifact.is_file()
+                else "Condition reference statistics are not included in this runtime artifact.",
+                setup_command=None
+                if anomaly_artifact.is_file()
+                else "reacts --project-root . build-anomaly-model",
+            ),
+            item("quality", "Score route quality", available=True),
+            item("system", "Inspect runtime", available=True),
+        ]
+
+        cli_only = [
+            item(
+                "build_anomaly_model",
+                "Build condition reference statistics",
+                available=not read_only,
+                state="cli_only",
+                reason="This prepares a derived statistics artifact; it is intentionally not run from the browser.",
+                setup_command="reacts --project-root . build-anomaly-model",
+            ),
+            item(
+                "data_pipeline",
+                "Build, map, derive, split, index, train and validate",
+                available=not read_only,
+                state="cli_only",
+                reason="Dataset mutation and model training remain explicit CLI operations.",
+                setup_command="reacts --help",
+            ),
+            item(
+                "artifact_publish",
+                "Package and validate an inference release",
+                available=not read_only,
+                state="cli_only",
+                reason="Artifact publication remains an explicit release-management operation.",
+                setup_command="reacts package-product-two-artifacts --help",
+            ),
+        ]
+        return {
+            "mode": "artifact_backed" if self.artifact_mode else "local_unmanaged",
+            "read_only": read_only,
+            "workflows": workflows,
+            "cli_only": cli_only,
+        }
+
     def retrieve_reactions(
         self,
         reaction_smiles: str,
